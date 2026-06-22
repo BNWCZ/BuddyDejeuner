@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #20160f; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+  input { font-family: inherit; border: none; }
+  input::placeholder { color: #baa88e; }
+  input:focus { outline: none; box-shadow: 0 0 0 3px rgba(244,180,62,.4); }
+  @keyframes bd-fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes bd-slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @keyframes bd-pop { 0% { transform: scale(.6); opacity: 0; } 60% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes bd-conf { 0% { transform: translateY(-12px) rotate(0deg); opacity: 0; } 12% { opacity: 1; } 100% { transform: translateY(580px) rotate(420deg); opacity: 0; } }
+  @keyframes bd-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  @keyframes bd-float { 0% { transform: translateY(10px) scale(.7); opacity: 0; } 25% { opacity: .85; } 100% { transform: translateY(-140px) scale(1.1); opacity: 0; } }
+</style>
+</helmet>
+
+<div style="min-height:100vh; display:flex; justify-content:center; background:#20160f;">
+  <div style="width:100%; max-width:480px; min-height:100vh; background:#FFF6E6; display:flex; flex-direction:column; position:relative; overflow:hidden;">
+
+    <!-- ======== LOGIN ======== -->
+    <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 32px; text-align:center;">
+        <div style="display:inline-block; background:#EE5535; color:#fff; font:800 11px 'Bricolage Grotesque',sans-serif; padding:5px 14px; border-radius:20px; transform:rotate(-4deg); letter-spacing:1px;">MARDI MIDI</div>
+        <div style="font:800 48px/1 'Bricolage Grotesque',sans-serif; color:#20160f; letter-spacing:-2px; margin-top:22px;">ON MANGE<br>OÙ ?!</div>
+        <div style="font:500 15px 'DM Sans',sans-serif; color:#9a8870; margin-top:14px; line-height:1.5;">Trouve ta team déjeuner<br>entre collègues</div>
+        <div style="width:100%; max-width:280px; margin-top:40px; display:flex; flex-direction:column; gap:12px;">
+          <input type="text" value="{{ nameInput }}" onInput="{{ onNameInput }}" onKeyDown="{{ onNameKeyDown }}" placeholder="Ton prénom" style="width:100%; padding:15px 18px; border:2px solid #20160f; border-radius:14px; font:700 16px 'Bricolage Grotesque',sans-serif; background:#fff; color:#20160f; text-align:center;">
+          <div onClick="{{ login }}" style="background:#F4B43E; color:#20160f; border:2px solid #20160f; border-radius:14px; padding:16px; text-align:center; font:800 16px 'Bricolage Grotesque',sans-serif; box-shadow:4px 4px 0 #20160f; cursor:pointer;" style-hover="transform:translate(2px,2px); box-shadow:2px 2px 0 #20160f;" style-active="transform:translate(4px,4px); box-shadow:none;">C'EST PARTI →</div>
+        </div>
+        <div style="margin-top:56px; font:800 17px 'Bricolage Grotesque',sans-serif; color:#20160f; letter-spacing:-.3px;">BUDDY<span style="color:#EE5535;">DÉJEUNER</span></div>
+      </div>
+    </sc-if>
+
+    <!-- ======== MAIN APP ======== -->
+    <sc-if value="{{ isMain }}" hint-placeholder-val="{{ false }}">
+
+      <!-- Header bar -->
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:2px solid #20160f; flex:none;">
+        <div style="font:800 17px 'Bricolage Grotesque',sans-serif; color:#20160f; letter-spacing:-.3px;">BUDDY<span style="color:#EE5535;">DÉJ</span></div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font:700 11px 'Bricolage Grotesque',sans-serif; color:#20160f; background:#FFEFCB; padding:4px 12px; border-radius:20px;">Mardi</span>
+          <div style="width:32px; height:32px; border-radius:10px; background:#EE5535; color:#fff; font:800 14px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center;">{{ userInitial }}</div>
+        </div>
+      </div>
+
+      <!-- Scrollable content -->
+      <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;">
+
+        <!-- VOTE TAB -->
+        <sc-if value="{{ isVoteTab }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:22px 18px 20px; animation:bd-fadeIn .3s ease-out;">
+            <div style="font:800 30px/1 'Bricolage Grotesque',sans-serif; color:#20160f; letter-spacing:-1px;">ON MANGE<br>OÙ ?!</div>
+            <div style="font:600 13px 'DM Sans',sans-serif; color:#9a8870; margin-top:8px;">Choisis tes favoris · {{ colCount }} collègues votent · {{ voteLabel }}</div>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:18px;">
+              <sc-for list="{{ restaurants }}" as="r" hint-placeholder-count="5">
+                <div onClick="{{ r.toggle }}" style="display:flex; align-items:center; gap:12px; padding:12px; background:{{ r.cardBg }}; border:2px solid #20160f; border-radius:18px; cursor:pointer; transition:transform .12s,box-shadow .12s;" style-hover="transform:translate(-1px,-1px); box-shadow:3px 3px 0 #20160f;" style-active="transform:translate(2px,2px); box-shadow:none;">
+                  <div style="width:44px; height:44px; border-radius:12px; background:{{ r.color }}; color:#fff; font:800 18px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; flex:none;">{{ r.mono }}</div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font:800 15px 'Bricolage Grotesque',sans-serif; color:{{ r.nameColor }};">{{ r.name }}</div>
+                    <div style="font:600 11.5px 'DM Sans',sans-serif; color:{{ r.metaColor }}; margin-top:1px;">{{ r.cuisine }} · {{ r.price }}</div>
+                  </div>
+                  <div style="background:{{ r.badgeBg }}; color:{{ r.badgeColor }}; border:{{ r.badgeBorder }}; font:800 11px 'Bricolage Grotesque',sans-serif; padding:6px 10px; border-radius:20px; flex:none; min-width:40px; text-align:center;">{{ r.badgeLabel }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div onClick="{{ submitVotes }}" style="margin-top:22px; background:#EE5535; color:#fff; border:2px solid #20160f; border-radius:16px; padding:16px; text-align:center; font:800 16px 'Bricolage Grotesque',sans-serif; box-shadow:4px 4px 0 #20160f; cursor:{{ submitPointer }}; opacity:{{ submitOpacity }}; transition:opacity .2s;" style-hover="transform:translate(2px,2px); box-shadow:2px 2px 0 #20160f;" style-active="transform:translate(4px,4px); box-shadow:none;">{{ submitLabel }}</div>
+          </div>
+        </sc-if>
+
+        <!-- RESULTS TAB -->
+        <sc-if value="{{ isResultsTab }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:22px 18px 20px; animation:bd-fadeIn .3s ease-out;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div style="font:800 30px/1 'Bricolage Grotesque',sans-serif; color:#20160f; letter-spacing:-1px;">LE PODIUM</div>
+              <sc-if value="{{ hasMatches }}">
+                <div onClick="{{ showMatchBrowse }}" style="background:#EE5535; color:#fff; font:800 11px 'Bricolage Grotesque',sans-serif; padding:6px 12px; border-radius:20px; cursor:pointer; display:flex; align-items:center; gap:5px; animation:bd-pulse 2s ease-in-out infinite;" style-hover="opacity:.85;">{{ matchCount }} matchs ♥</div>
+              </sc-if>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:14px;">
+              <div onClick="{{ setRestoView }}" style="flex:1; text-align:center; font:800 12px 'Bricolage Grotesque',sans-serif; background:{{ restoToggleBg }}; color:{{ restoToggleColor }}; padding:9px; border-radius:20px; cursor:pointer; transition:all .2s;">RESTOS</div>
+              <div onClick="{{ setColView }}" style="flex:1; text-align:center; font:800 12px 'Bricolage Grotesque',sans-serif; background:{{ colToggleBg }}; color:{{ colToggleColor }}; padding:9px; border-radius:20px; cursor:pointer; transition:all .2s;">COLLÈGUES</div>
+            </div>
+            <sc-if value="{{ notSubmitted }}">
+              <div style="margin-top:16px; padding:14px; background:#FFEFCB; border:2px solid #20160f; border-radius:14px; text-align:center; font:700 13px 'DM Sans',sans-serif; color:#20160f;">Vote d'abord pour voir tes matchs !</div>
+            </sc-if>
+            <sc-if value="{{ isRestoView }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column; gap:11px; margin-top:16px;">
+                <sc-for list="{{ resultsByResto }}" as="res" hint-placeholder-count="4">
+                  <div style="padding:14px; background:{{ res.cardBg }}; border:2px solid #20160f; border-radius:18px; box-shadow:{{ res.cardShadow }};">
+                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                      <span style="font:800 15px 'Bricolage Grotesque',sans-serif; color:{{ res.rankColor }};">{{ res.rankLabel }}</span>
+                      <span style="font:800 22px 'Bricolage Grotesque',sans-serif; color:{{ res.scoreColor }};">{{ res.total }}</span>
+                    </div>
+                    <div style="height:8px; background:rgba(32,22,15,.1); border-radius:5px; margin:10px 0; overflow:hidden;">
+                      <div style="width:{{ res.barWidth }}; height:100%; background:{{ res.barColor }}; border-radius:5px; transition:width .4s ease-out;"></div>
+                    </div>
+                    <div style="font:600 12px 'DM Sans',sans-serif; color:#9a8870;">{{ res.voterText }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ isColView }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:11px; margin-top:16px;">
+                <sc-for list="{{ resultsByColleague }}" as="col" hint-placeholder-count="4">
+                  <div style="padding:14px; background:#fff; border:2px solid #20160f; border-radius:18px;">
+                    <div style="display:flex; align-items:center; gap:11px;">
+                      <div style="width:40px; height:40px; border-radius:12px; background:{{ col.color }}; color:#fff; font:800 16px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; flex:none;">{{ col.initial }}</div>
+                      <div style="flex:1;">
+                        <div style="font:800 15px 'Bricolage Grotesque',sans-serif; color:#20160f;">{{ col.name }}</div>
+                        <div style="font:600 11px 'DM Sans',sans-serif; color:#9a8870;">{{ col.restoCount }} votes</div>
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
+                      <sc-for list="{{ col.restos }}" as="cr">
+                        <span style="font:700 11px 'Bricolage Grotesque',sans-serif; padding:5px 10px; border-radius:20px; background:{{ cr.chipBg }}; color:#20160f;">{{ cr.name }}</span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- RESTAURANTS TAB -->
+        <sc-if value="{{ isRestosTab }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:22px 18px 20px; animation:bd-fadeIn .3s ease-out;">
+            <div style="font:800 30px/1 'Bricolage Grotesque',sans-serif; color:#20160f; letter-spacing:-1px;">LES RESTOS</div>
+            <div style="font:600 13px 'DM Sans',sans-serif; color:#9a8870; margin-top:8px;">Gère les restaurants du coin</div>
+            <div style="display:flex; gap:8px; margin-top:18px;">
+              <input type="text" value="{{ newRestoName }}" onInput="{{ onNewRestoName }}" onKeyDown="{{ onNewRestoKeyDown }}" placeholder="Ajouter un resto..." style="flex:1; padding:12px 16px; border:2px solid #20160f; border-radius:14px; font:700 14px 'Bricolage Grotesque',sans-serif; background:#fff; color:#20160f;">
+              <div onClick="{{ addRestaurant }}" style="background:#F4B43E; color:#20160f; border:2px solid #20160f; border-radius:14px; padding:12px 18px; font:800 20px 'Bricolage Grotesque',sans-serif; cursor:pointer; box-shadow:3px 3px 0 #20160f; display:flex; align-items:center;" style-hover="transform:translate(1px,1px); box-shadow:2px 2px 0 #20160f;" style-active="transform:translate(3px,3px); box-shadow:none;">+</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:18px;">
+              <sc-for list="{{ restaurants }}" as="r" hint-placeholder-count="5">
+                <div style="display:flex; align-items:center; gap:12px; padding:12px; background:#fff; border:2px solid #20160f; border-radius:18px;">
+                  <div style="width:40px; height:40px; border-radius:12px; background:{{ r.color }}; color:#fff; font:800 16px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; flex:none;">{{ r.mono }}</div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font:800 14px 'Bricolage Grotesque',sans-serif; color:#20160f;">{{ r.name }}</div>
+                    <div style="font:600 11px 'DM Sans',sans-serif; color:#9a8870; margin-top:1px;">{{ r.cuisine }} · {{ r.price }}</div>
+                  </div>
+                  <div onClick="{{ r.remove }}" style="width:28px; height:28px; border-radius:50%; border:2px solid #20160f; color:#20160f; font:800 12px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#EE5535; color:#fff; border-color:#EE5535;">✕</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- Bottom tab bar -->
+      <div style="display:flex; padding:10px 14px calc(10px + env(safe-area-inset-bottom, 16px)); background:#FFF6E6; border-top:2px solid #20160f; gap:6px; flex:none;">
+        <div onClick="{{ setVoteTab }}" style="flex:1; text-align:center; padding:11px 8px; border-radius:14px; font:800 13px 'Bricolage Grotesque',sans-serif; background:{{ voteTabBg }}; color:{{ voteTabColor }}; cursor:pointer; transition:all .15s;" style-hover="opacity:.85;">VOTE</div>
+        <div onClick="{{ setResultsTab }}" style="flex:1; text-align:center; padding:11px 8px; border-radius:14px; font:800 13px 'Bricolage Grotesque',sans-serif; background:{{ resultsTabBg }}; color:{{ resultsTabColor }}; cursor:pointer; transition:all .15s;" style-hover="opacity:.85;">PODIUM</div>
+        <div onClick="{{ setRestosTab }}" style="flex:1; text-align:center; padding:11px 8px; border-radius:14px; font:800 13px 'Bricolage Grotesque',sans-serif; background:{{ restosTabBg }}; color:{{ restosTabColor }}; cursor:pointer; transition:all .15s;" style-hover="opacity:.85;">RESTOS</div>
+      </div>
+
+      <!-- ======== MATCH REVEAL OVERLAY ======== -->
+      <sc-if value="{{ isMatchReveal }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; inset:0; background:#20160f; z-index:100; display:flex; flex-direction:column; animation:bd-slideUp .4s ease-out;">
+          <sc-if value="{{ confetti }}" hint-placeholder-val="{{ true }}">
+            <div style="position:absolute; inset:0; overflow:hidden; pointer-events:none;">
+              <span style="position:absolute; left:16%; top:0; width:9px; height:14px; background:#F4B43E; border-radius:1px; animation:bd-conf 2.6s linear infinite;"></span>
+              <span style="position:absolute; left:34%; top:0; width:9px; height:9px; background:#EE5535; border-radius:50%; animation:bd-conf 3.1s linear .4s infinite;"></span>
+              <span style="position:absolute; left:54%; top:0; width:10px; height:10px; background:#7F8B55; border-radius:2px; animation:bd-conf 2.9s linear .8s infinite;"></span>
+              <span style="position:absolute; left:72%; top:0; width:8px; height:15px; background:#F4B43E; border-radius:1px; animation:bd-conf 3.3s linear .2s infinite;"></span>
+              <span style="position:absolute; left:88%; top:0; width:9px; height:9px; background:#EE5535; border-radius:50%; animation:bd-conf 2.7s linear 1s infinite;"></span>
+              <span style="position:absolute; left:26%; top:0; width:8px; height:8px; background:#fff; border-radius:50%; animation:bd-conf 3.5s linear 1.3s infinite;"></span>
+            </div>
+            <div style="position:absolute; inset:0; overflow:hidden; pointer-events:none;">
+              <span style="position:absolute; left:12%; bottom:80px; color:rgba(255,255,255,.7); font-size:20px; animation:bd-float 3s ease-in infinite;">♥</span>
+              <span style="position:absolute; left:82%; bottom:120px; color:rgba(255,255,255,.55); font-size:15px; animation:bd-float 3.6s ease-in .6s infinite;">♥</span>
+              <span style="position:absolute; left:46%; bottom:60px; color:rgba(255,255,255,.8); font-size:24px; animation:bd-float 3.2s ease-in .3s infinite;">♥</span>
+            </div>
+          </sc-if>
+          <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center; position:relative;">
+            <div style="display:inline-block; background:#F4B43E; color:#20160f; font:800 12px 'Bricolage Grotesque',sans-serif; padding:5px 14px; border-radius:20px; transform:rotate(-4deg); letter-spacing:1px; animation:bd-pop .45s ease-out;">IT'S A MATCH</div>
+            <div style="font:800 28px 'Bricolage Grotesque',sans-serif; color:#FFF6E6; letter-spacing:-.5px; margin-top:18px; line-height:1; animation:bd-pop .5s ease-out;">Tu as</div>
+            <div style="font:800 80px 'Bricolage Grotesque',sans-serif; color:#F4B43E; letter-spacing:-3px; line-height:.8; animation:bd-pop .55s ease-out;">{{ matchCount }}</div>
+            <div style="font:800 34px 'Bricolage Grotesque',sans-serif; color:#FFF6E6; letter-spacing:-1px; line-height:1; animation:bd-pop .6s ease-out;">MATCHS !</div>
+            <div style="display:flex; align-items:center; justify-content:center; margin:30px 0 22px; animation:bd-pop .65s ease-out;">
+              <div style="width:62px; height:62px; border-radius:16px; border:3px solid #FFF6E6; background:#EE5535; color:#fff; font:800 15px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; transform:rotate(-6deg); flex:none;">TOI</div>
+              <div style="width:34px; height:34px; border-radius:50%; background:#F4B43E; color:#20160f; font-size:15px; display:flex; align-items:center; justify-content:center; margin:0 -8px; z-index:5; border:3px solid #20160f; animation:bd-pulse 1.3s ease-in-out infinite; flex:none;">♥</div>
+              <sc-for list="{{ matchAvatars }}" as="ma">
+                <div style="width:56px; height:56px; border-radius:16px; border:3px solid #20160f; background:{{ ma.color }}; color:#fff; font:800 20px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; margin-left:-14px;">{{ ma.initial }}</div>
+              </sc-for>
+            </div>
+            <div style="font:600 14.5px 'DM Sans',sans-serif; color:rgba(255,246,230,.9); line-height:1.45; padding:0 10px;">Des collègues ont flashé sur les mêmes restos que toi</div>
+          </div>
+          <div style="padding:0 24px 36px; display:flex; flex-direction:column; gap:10px; position:relative;">
+            <div onClick="{{ showMatchBrowse }}" style="background:#F4B43E; color:#20160f; border:2px solid #FFF6E6; border-radius:16px; padding:16px; text-align:center; font:800 16px 'Bricolage Grotesque',sans-serif; box-shadow:4px 4px 0 #EE5535; cursor:pointer;" style-hover="transform:translate(2px,2px); box-shadow:2px 2px 0 #EE5535;" style-active="transform:translate(4px,4px); box-shadow:none;">VOIR TOUS LES MATCHS →</div>
+            <div onClick="{{ goToPodium }}" style="color:rgba(255,246,230,.7); text-align:center; font:700 14px 'DM Sans',sans-serif; cursor:pointer; padding:8px;" style-hover="color:#FFF6E6;">Voir le podium</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ======== MATCH BROWSE OVERLAY ======== -->
+      <sc-if value="{{ isMatchBrowse }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; inset:0; background:#FFF6E6; z-index:100; display:flex; flex-direction:column; animation:bd-slideUp .35s ease-out;">
+          <div style="padding:18px 20px 6px; display:flex; align-items:center; justify-content:space-between; flex:none;">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <span style="font:800 26px 'Bricolage Grotesque',sans-serif; color:#20160f; letter-spacing:-1px;">TES MATCHS</span>
+              <span style="background:#EE5535; color:#fff; font:800 13px 'Bricolage Grotesque',sans-serif; min-width:24px; height:24px; padding:0 7px; border-radius:20px; display:flex; align-items:center; justify-content:center;">{{ matchCount }}</span>
+            </div>
+            <div onClick="{{ goToPodium }}" style="width:34px; height:34px; border-radius:50%; border:2px solid #20160f; color:#20160f; font:800 14px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; cursor:pointer; flex:none;" style-hover="background:#EE5535; color:#fff; border-color:#EE5535;">✕</div>
+          </div>
+          <div style="padding:0 20px 10px; font:600 13px 'DM Sans',sans-serif; color:#9a8870; flex:none;">Les collègues qui ont voté comme toi</div>
+          <div style="flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:6px 18px 20px; display:flex; flex-direction:column; gap:11px;">
+            <sc-for list="{{ matches }}" as="m" hint-placeholder-count="3">
+              <div style="padding:14px; background:{{ m.cardBg }}; border:2px solid #20160f; border-radius:18px; box-shadow:{{ m.cardShadow }};">
+                <div style="display:flex; align-items:center; gap:11px;">
+                  <div style="width:42px; height:42px; border-radius:12px; background:{{ m.color }}; color:#fff; font:800 17px 'Bricolage Grotesque',sans-serif; display:flex; align-items:center; justify-content:center; flex:none;">{{ m.initial }}</div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font:800 15px 'Bricolage Grotesque',sans-serif; color:#20160f;">{{ m.name }}</div>
+                    <div style="font:700 11px 'DM Sans',sans-serif; color:{{ m.metaColor }};">{{ m.sharedCount }} resto{{ m.pluralS }} en commun</div>
+                  </div>
+                  <sc-if value="{{ m.isTop }}">
+                    <span style="background:#20160f; color:#F4B43E; font:800 9px 'Bricolage Grotesque',sans-serif; padding:5px 9px; border-radius:20px; flex:none; letter-spacing:.5px;">TOP</span>
+                  </sc-if>
+                </div>
+                <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;">
+                  <sc-for list="{{ m.sharedRestos }}" as="sr">
+                    <span style="background:{{ sr.chipBg }}; color:#20160f; font:800 11px 'Bricolage Grotesque',sans-serif; padding:5px 10px; border-radius:20px;">{{ sr.name }}</span>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:12px 18px calc(12px + env(safe-area-inset-bottom, 16px)); border-top:2px solid #20160f; flex:none;">
+            <div onClick="{{ goToPodium }}" style="background:#20160f; color:#FFF6E6; border-radius:16px; padding:15px; text-align:center; font:800 16px 'Bricolage Grotesque',sans-serif; cursor:pointer;" style-hover="background:#3a2a1e;">← VOIR LE PODIUM</div>
+          </div>
+        </div>
+      </sc-if>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;maxVotes&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 3, &quot;min&quot;: 1, &quot;max&quot;: 6, &quot;step&quot;: 1, &quot;tsType&quot;: &quot;number&quot; },
+  &quot;confetti&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; }
+}">
+class Component extends DCLogic {
+  state = {
+    screen: 'login',
+    nameInput: '',
+    userName: '',
+    tab: 'vote',
+    overlay: null,
+    selectedVotes: [],
+    hasSubmitted: false,
+    resultView: 'resto',
+    newRestoName: '',
+    restaurants: [
+      { id: 1, name: 'Le Petit Zinc', cuisine: 'Bistrot français', price: '€€', mono: 'Z', color: '#F4B43E' },
+      { id: 2, name: 'Sushi Yaki', cuisine: 'Japonais', price: '€€', mono: 'Y', color: '#EE5535' },
+      { id: 3, name: 'La Cantine Verte', cuisine: 'Veggie & bowls', price: '€', mono: 'V', color: '#7F8B55' },
+      { id: 4, name: 'Pizza Nuvola', cuisine: 'Italien', price: '€€', mono: 'N', color: '#C98C2E' },
+      { id: 5, name: 'Chez Marcel', cuisine: 'Brasserie', price: '€€', mono: 'M', color: '#9B5B6B' },
+      { id: 6, name: 'Le Tacos du Coin', cuisine: 'Street food', price: '€', mono: 'T', color: '#6B5B95' },
+    ]
+  };
+
+  colleagues = [
+    { name: 'Camille', initial: 'C', color: '#EE5535', votes: [1, 2] },
+    { name: 'Thomas', initial: 'T', color: '#7F8B55', votes: [1, 4] },
+    { name: 'Léa', initial: 'L', color: '#9B5B6B', votes: [1, 3, 5] },
+    { name: 'Karim', initial: 'K', color: '#C98C2E', votes: [3, 6] },
+    { name: 'Sophie', initial: 'S', color: '#BE5635', votes: [2, 4] },
+    { name: 'Julien', initial: 'J', color: '#556B2F', votes: [1, 5, 6] },
+    { name: 'Inès', initial: 'I', color: '#8B6C5C', votes: [2, 3] },
+    { name: 'Hugo', initial: 'H', color: '#6B5B95', votes: [4, 5] },
+  ];
+
+  renderVals() {
+    const s = this.state;
+    const maxVotes = this.props.maxVotes ?? 3;
+    const confetti = this.props.confetti ?? true;
+    const uv = s.selectedVotes;
+
+    // ── Restaurants with vote state ──
+    const restaurants = s.restaurants.map(r => {
+      const sel = uv.includes(r.id);
+      return {
+        ...r,
+        cardBg: sel ? '#20160f' : '#fff',
+        nameColor: sel ? '#FFF6E6' : '#20160f',
+        metaColor: sel ? '#b8a48c' : '#9a8870',
+        badgeLabel: sel ? 'PICKED' : '+',
+        badgeBg: sel ? '#EE5535' : 'transparent',
+        badgeColor: sel ? '#fff' : '#20160f',
+        badgeBorder: sel ? 'none' : '2px solid #20160f',
+        toggle: () => {
+          this.setState(prev => {
+            const sv = [...prev.selectedVotes];
+            const idx = sv.indexOf(r.id);
+            if (idx > -1) sv.splice(idx, 1);
+            else if (sv.length < maxVotes) sv.push(r.id);
+            return { selectedVotes: sv };
+          });
+        },
+        remove: () => {
+          this.setState(prev => ({
+            restaurants: prev.restaurants.filter(x => x.id !== r.id),
+            selectedVotes: prev.selectedVotes.filter(v => v !== r.id),
+          }));
+        },
+      };
+    });
+
+    // ── Results by restaurant ──
+    const resRaw = s.restaurants
+      .map(r => {
+        const cv = this.colleagues.filter(c => c.votes.includes(r.id));
+        const userVoted = s.hasSubmitted && uv.includes(r.id);
+        return { ...r, voters: cv, userVoted, total: cv.length + (userVoted ? 1 : 0) };
+      })
+      .filter(r => r.total > 0)
+      .sort((a, b) => b.total - a.total);
+    const maxT = Math.max(...resRaw.map(r => r.total), 1);
+    const bCols = ['#F4B43E', '#EE5535', '#7F8B55', '#C98C2E', '#9B5B6B', '#6B5B95'];
+    const resultsByResto = resRaw.map((r, i) => ({
+      ...r,
+      rankLabel: (i + 1) + ' · ' + r.name,
+      barWidth: Math.round((r.total / maxT) * 100) + '%',
+      barColor: bCols[i % bCols.length],
+      cardBg: i === 0 ? '#F4B43E' : '#fff',
+      cardShadow: i === 0 ? '3px 3px 0 #20160f' : 'none',
+      rankColor: '#20160f',
+      scoreColor: i === 0 ? '#20160f' : '#EE5535',
+      voterText: r.voters.slice(0, 3).map(v => v.name).join(', ') +
+        (r.voters.length > 3 ? ' +' + (r.voters.length - 3) : '') +
+        (r.userVoted ? (r.voters.length > 0 ? ', Toi' : 'Toi') : ''),
+    }));
+
+    // ── Results by colleague ──
+    const resultsByColleague = this.colleagues.map(c => {
+      const restos = c.votes
+        .map(vId => {
+          const r = s.restaurants.find(x => x.id === vId);
+          if (!r) return null;
+          const shared = s.hasSubmitted && uv.includes(vId);
+          return { name: r.name, chipBg: shared ? '#F4B43E' : '#FFEFCB' };
+        })
+        .filter(Boolean);
+      return { ...c, restos, restoCount: restos.length };
+    }).sort((a, b) => b.restoCount - a.restoCount);
+
+    // ── Matches ──
+    const matches = this.colleagues
+      .map(c => {
+        const shared = c.votes.filter(v => uv.includes(v));
+        const sharedRestos = shared
+          .map(vId => { const r = s.restaurants.find(x => x.id === vId); return r ? { name: r.name } : null; })
+          .filter(Boolean);
+        return { ...c, sharedRestos, sharedCount: shared.length };
+      })
+      .filter(c => c.sharedCount > 0)
+      .sort((a, b) => b.sharedCount - a.sharedCount)
+      .map((m, i) => ({
+        ...m,
+        isTop: i === 0,
+        cardBg: i === 0 ? '#F4B43E' : '#fff',
+        cardShadow: i === 0 ? '3px 3px 0 #20160f' : 'none',
+        metaColor: i === 0 ? '#7a5a14' : '#9a8870',
+        chipBg: i === 0 ? '#FFF6E6' : '#FFEFCB',
+        pluralS: m.sharedCount > 1 ? 's' : '',
+        sharedRestos: m.sharedRestos.map(sr => ({ ...sr, chipBg: i === 0 ? '#FFF6E6' : '#FFEFCB' })),
+      }));
+
+    const matchAvatars = matches.slice(0, 3);
+
+    // ── Tab styles ──
+    const tb = (a) => ({ bg: a ? '#20160f' : 'transparent', color: a ? '#FFF6E6' : '#9a8870' });
+    const vt = tb(s.tab === 'vote'), rt = tb(s.tab === 'results'), st = tb(s.tab === 'restaurants');
+    const rv = s.resultView === 'resto', cv = s.resultView === 'colleague';
+
+    return {
+      isLogin: s.screen === 'login', isMain: s.screen === 'main',
+      isVoteTab: s.tab === 'vote', isResultsTab: s.tab === 'results', isRestosTab: s.tab === 'restaurants',
+      isMatchReveal: s.overlay === 'matchReveal', isMatchBrowse: s.overlay === 'matchBrowse',
+      isRestoView: rv, isColView: cv,
+      hasSubmitted: s.hasSubmitted, notSubmitted: !s.hasSubmitted,
+      userName: s.userName, userInitial: (s.userName[0] || '?').toUpperCase(), nameInput: s.nameInput,
+      restaurants, resultsByResto, resultsByColleague, matches, matchAvatars,
+      matchCount: matches.length, hasMatches: matches.length > 0 && s.hasSubmitted,
+      voteCount: uv.length, maxVotes, voteLabel: uv.length + '/' + maxVotes,
+      colCount: this.colleagues.length, confetti, newRestoName: s.newRestoName,
+      submitOpacity: uv.length > 0 ? '1' : '.45',
+      submitPointer: uv.length > 0 ? 'pointer' : 'not-allowed',
+      submitLabel: s.hasSubmitted ? 'METTRE À JOUR →' : 'ENVOYER MES VOTES →',
+      voteTabBg: vt.bg, voteTabColor: vt.color,
+      resultsTabBg: rt.bg, resultsTabColor: rt.color,
+      restosTabBg: st.bg, restosTabColor: st.color,
+      restoToggleBg: rv ? '#20160f' : '#FFEFCB', restoToggleColor: rv ? '#FFF6E6' : '#20160f',
+      colToggleBg: cv ? '#20160f' : '#FFEFCB', colToggleColor: cv ? '#FFF6E6' : '#20160f',
+      // Handlers
+      login: () => { const n = s.nameInput.trim(); if (n) this.setState({ screen: 'main', userName: n }); },
+      onNameInput: (e) => this.setState({ nameInput: e.target.value }),
+      onNameKeyDown: (e) => { if (e.key === 'Enter') { const n = s.nameInput.trim(); if (n) this.setState({ screen: 'main', userName: n }); } },
+      submitVotes: () => {
+        if (uv.length === 0) return;
+        const hasM = this.colleagues.some(c => c.votes.some(v => uv.includes(v)));
+        this.setState({ hasSubmitted: true, overlay: hasM ? 'matchReveal' : null, tab: 'results' });
+      },
+      setVoteTab: () => this.setState({ tab: 'vote', overlay: null }),
+      setResultsTab: () => this.setState({ tab: 'results', overlay: null }),
+      setRestosTab: () => this.setState({ tab: 'restaurants', overlay: null }),
+      showMatchBrowse: () => this.setState({ overlay: 'matchBrowse' }),
+      goToPodium: () => this.setState({ overlay: null, tab: 'results' }),
+      setRestoView: () => this.setState({ resultView: 'resto' }),
+      setColView: () => this.setState({ resultView: 'colleague' }),
+      onNewRestoName: (e) => this.setState({ newRestoName: e.target.value }),
+      onNewRestoKeyDown: (e) => {
+        if (e.key === 'Enter') {
+          const nm = s.newRestoName.trim();
+          if (!nm) return;
+          const id = Math.max(0, ...s.restaurants.map(r => r.id)) + 1;
+          this.setState({ restaurants: [...s.restaurants, { id, name: nm, cuisine: 'Nouveau', price: '€', mono: nm[0].toUpperCase(), color: '#F4B43E' }], newRestoName: '' });
+        }
+      },
+      addRestaurant: () => {
+        const nm = s.newRestoName.trim();
+        if (!nm) return;
+        const id = Math.max(0, ...s.restaurants.map(r => r.id)) + 1;
+        this.setState({ restaurants: [...s.restaurants, { id, name: nm, cuisine: 'Nouveau', price: '€', mono: nm[0].toUpperCase(), color: '#F4B43E' }], newRestoName: '' });
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

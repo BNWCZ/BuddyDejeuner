@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>BuddyDejeuner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-wrapper">
+        <div class="app-container">
+
+            <!-- LOGIN -->
+            <div id="login-screen" class="screen">
+                <div class="login-content">
+                    <div class="login-day-tag" id="login-day-tag"></div>
+                    <div class="login-title">ON MANGE<br>OÙ ?!</div>
+                    <div class="login-subtitle">Trouve ta team déjeuner<br>entre collègues</div>
+                    <div class="login-form">
+                        <input type="text" id="username-input" placeholder="Ton prénom" class="bd-input login-input">
+                        <div id="login-btn" class="bd-btn bd-btn-primary">C'EST PARTI →</div>
+                    </div>
+                    <div class="login-brand">BUDDY<span class="brand-accent">DÉJEUNER</span></div>
+                </div>
+            </div>
+
+            <!-- MAIN APP -->
+            <div id="main-screen" class="screen" hidden>
+
+                <!-- Header -->
+                <div class="header">
+                    <div class="header-brand">BUDDY<span class="brand-accent">DÉJ</span></div>
+                    <div class="header-right">
+                        <span class="day-badge" id="header-day"></span>
+                        <div class="user-avatar" id="user-avatar"></div>
+                    </div>
+                </div>
+
+                <!-- Scrollable content -->
+                <div class="content-scroll">
+
+                    <!-- VOTE TAB -->
+                    <section id="tab-vote" class="tab-content">
+                        <div class="tab-page">
+                            <div class="page-title">ON MANGE<br>OÙ ?!</div>
+                            <div class="page-subtitle" id="vote-subtitle"></div>
+                            <div id="vote-list" class="card-list"></div>
+                            <div id="vote-submit" class="bd-btn bd-btn-tomato">ENVOYER MES VOTES →</div>
+                        </div>
+                    </section>
+
+                    <!-- RESULTS TAB -->
+                    <section id="tab-results" class="tab-content" hidden>
+                        <div class="tab-page">
+                            <div class="results-header">
+                                <div class="page-title">LE PODIUM</div>
+                                <div id="match-badge" class="match-badge" hidden></div>
+                            </div>
+                            <div class="toggle-bar">
+                                <div class="toggle-btn active" data-view="restaurant" id="toggle-resto">RESTOS</div>
+                                <div class="toggle-btn" data-view="person" id="toggle-col">COLLÈGUES</div>
+                            </div>
+                            <div id="results-content" class="card-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- RESTAURANTS TAB -->
+                    <section id="tab-restaurants" class="tab-content" hidden>
+                        <div class="tab-page">
+                            <div class="page-title">LES RESTOS</div>
+                            <div class="page-subtitle">Gère les restaurants du coin</div>
+                            <div class="add-bar">
+                                <input type="text" id="new-restaurant-name" placeholder="Ajouter un resto..." class="bd-input">
+                                <div id="add-restaurant-btn" class="bd-btn bd-btn-primary add-btn">+</div>
+                            </div>
+                            <div id="restaurant-list" class="card-list"></div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Bottom tab bar -->
+                <div class="tab-bar">
+                    <div class="tab-bar-btn active" data-tab="vote">VOTE</div>
+                    <div class="tab-bar-btn" data-tab="results">PODIUM</div>
+                    <div class="tab-bar-btn" data-tab="restaurants">RESTOS</div>
+                </div>
+            </div>
+
+            <!-- MATCH REVEAL OVERLAY -->
+            <div id="match-reveal" class="overlay" hidden>
+                <div class="match-confetti">
+                    <span class="confetti c1"></span>
+                    <span class="confetti c2"></span>
+                    <span class="confetti c3"></span>
+                    <span class="confetti c4"></span>
+                    <span class="confetti c5"></span>
+                </div>
+                <div class="match-reveal-content">
+                    <div class="match-tag">IT'S A MATCH</div>
+                    <div class="match-subtitle">Tu as</div>
+                    <div class="match-count" id="reveal-match-count"></div>
+                    <div class="match-label">MATCHS !</div>
+                    <div class="match-avatars" id="reveal-avatars"></div>
+                    <div class="match-desc">Des collègues ont flashé sur les mêmes restos que toi</div>
+                </div>
+                <div class="match-reveal-actions">
+                    <div id="reveal-browse-btn" class="bd-btn bd-btn-primary">VOIR TOUS LES MATCHS →</div>
+                    <div id="reveal-podium-btn" class="match-skip">Voir le podium</div>
+                </div>
+            </div>
+
+            <!-- MATCH BROWSE OVERLAY -->
+            <div id="match-browse" class="overlay overlay-cream" hidden>
+                <div class="match-browse-header">
+                    <div class="match-browse-title">
+                        <span>TES MATCHS</span>
+                        <span class="match-count-badge" id="browse-match-count"></span>
+                    </div>
+                    <div id="browse-close" class="close-btn">✕</div>
+                </div>
+                <div class="match-browse-sub">Les collègues qui ont voté comme toi</div>
+                <div id="match-list" class="match-browse-list"></div>
+                <div class="match-browse-footer">
+                    <div id="browse-podium-btn" class="bd-btn bd-btn-dark">← VOIR LE PODIUM</div>
+                </div>
+            </div>
+
+            <!-- EDIT MODAL -->
+            <div id="edit-overlay" class="overlay overlay-cream" hidden>
+                <div class="match-browse-header">
+                    <div class="match-browse-title">
+                        <span id="modal-title"></span>
+                    </div>
+                    <div id="modal-close" class="close-btn">✕</div>
+                </div>
+                <div class="modal-body" id="modal-fields"></div>
+                <div class="match-browse-footer" id="modal-buttons"></div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
