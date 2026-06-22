@@ -4,6 +4,9 @@ const DAYS_FR = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", 
 const COLORS = ["#F4B43E", "#EE5535", "#7F8B55", "#C98C2E", "#9B5B6B", "#6B5B95", "#556B2F", "#8B6C5C", "#BE5635"];
 
 let username = localStorage.getItem("buddydejeuner_username") || "";
+let teams = JSON.parse(localStorage.getItem("buddydejeuner_teams") || "[]");
+let currentTeamId = localStorage.getItem("buddydejeuner_current_team") || "";
+let currentTeam = null;
 let restaurants = [];
 let votes = {};
 let currentResultView = "restaurant";
@@ -19,6 +22,20 @@ function tagsOf(r) {
     return (r.tags || "").split(", ").filter(Boolean);
 }
 
+function saveTeams() {
+    localStorage.setItem("buddydejeuner_teams", JSON.stringify(teams));
+}
+
+function setCurrentTeam(team) {
+    currentTeam = team;
+    currentTeamId = team.id;
+    localStorage.setItem("buddydejeuner_current_team", team.id);
+    if (!teams.find((t) => t.id === team.id)) {
+        teams.push({ id: team.id, name: team.name, invite_code: team.invite_code });
+        saveTeams();
+    }
+}
+
 // --- Init ---
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -26,18 +43,67 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("login-day-tag").textContent = dayName.toUpperCase() + " MIDI";
     document.getElementById("header-day").textContent = dayName;
 
-    if (username) showMain();
-    else document.getElementById("login-screen").hidden = false;
+    // Check for ?join=CODE in URL
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get("join");
 
-    document.getElementById("login-btn").addEventListener("click", login);
-    document.getElementById("username-input").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
-    document.getElementById("vote-submit").addEventListener("click", submitVotes);
-    document.getElementById("add-restaurant-btn").addEventListener("click", addRestaurant);
-    document.getElementById("new-restaurant-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addRestaurant(); });
+    if (joinCode) {
+        // Join flow: need username first, then auto-join
+        if (username) {
+            autoJoin(joinCode);
+        } else {
+            showLoginScreen();
+            document.getElementById("login-btn").addEventListener("click", () => {
+                if (setUsername()) autoJoin(joinCode);
+            });
+            document.getElementById("username-input").addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && setUsername()) autoJoin(joinCode);
+            });
+        }
+        return;
+    }
 
+    if (username && currentTeamId) {
+        enterTeam(currentTeamId);
+    } else if (username) {
+        showTeamStep();
+    } else {
+        showLoginScreen();
+    }
+
+    setupLoginHandlers();
+    setupAppHandlers();
+});
+
+function showLoginScreen() {
+    document.getElementById("login-screen").hidden = false;
+    document.getElementById("main-screen").hidden = true;
+    document.getElementById("step-username").hidden = false;
+    document.getElementById("step-team").hidden = true;
+}
+
+function setupLoginHandlers() {
+    document.getElementById("login-btn").addEventListener("click", () => {
+        if (setUsername()) showTeamStep();
+    });
+    document.getElementById("username-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && setUsername()) showTeamStep();
+    });
+
+    document.getElementById("create-team-btn").addEventListener("click", createTeam);
+    document.getElementById("new-team-name").addEventListener("keydown", (e) => { if (e.key === "Enter") createTeam(); });
+    document.getElementById("join-team-btn").addEventListener("click", joinTeamFromCode);
+    document.getElementById("join-code-input").addEventListener("keydown", (e) => { if (e.key === "Enter") joinTeamFromCode(); });
+}
+
+function setupAppHandlers() {
     document.querySelectorAll(".tab-bar-btn").forEach((btn) => {
         btn.addEventListener("click", () => switchTab(btn.dataset.tab));
     });
+
+    document.getElementById("vote-submit").addEventListener("click", submitVotes);
+    document.getElementById("add-restaurant-btn").addEventListener("click", addRestaurant);
+    document.getElementById("new-restaurant-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addRestaurant(); });
 
     document.getElementById("toggle-resto").addEventListener("click", () => { currentResultView = "restaurant"; updateToggles(); renderResults(); });
     document.getElementById("toggle-col").addEventListener("click", () => { currentResultView = "person"; updateToggles(); renderResults(); });
@@ -47,21 +113,156 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("browse-podium-btn").addEventListener("click", goToPodium);
     document.getElementById("browse-close").addEventListener("click", goToPodium);
     document.getElementById("modal-close").addEventListener("click", () => { document.getElementById("edit-overlay").hidden = true; });
-});
 
-function login() {
+    document.getElementById("header-invite").addEventListener("click", copyInviteLink);
+    document.getElementById("header-switch").addEventListener("click", () => {
+        currentTeamId = "";
+        localStorage.removeItem("buddydejeuner_current_team");
+        document.getElementById("main-screen").hidden = true;
+        document.getElementById("login-screen").hidden = false;
+        document.getElementById("step-username").hidden = true;
+        showTeamStep();
+    });
+}
+
+// --- Username ---
+
+function setUsername() {
     const input = document.getElementById("username-input");
     username = input.value.trim();
-    if (!username) return;
+    if (!username) return false;
     localStorage.setItem("buddydejeuner_username", username);
+    return true;
+}
+
+// --- Team selection ---
+
+function showTeamStep() {
+    document.getElementById("step-username").hidden = true;
+    document.getElementById("step-team").hidden = false;
+    document.getElementById("team-error").hidden = true;
+
+    if (teams.length > 0) {
+        document.getElementById("my-teams").hidden = false;
+        document.getElementById("team-or-label").textContent = "Ou crée / rejoins une équipe";
+        const list = document.getElementById("team-list");
+        list.innerHTML = "";
+        for (const t of teams) {
+            list.innerHTML += `
+                <div class="team-item" data-team-id="${t.id}">
+                    <div class="team-item-name">${t.name}</div>
+                    <div class="team-item-arrow">→</div>
+                </div>
+            `;
+        }
+        list.querySelectorAll(".team-item").forEach((item) => {
+            item.addEventListener("click", () => enterTeam(item.dataset.teamId));
+        });
+    } else {
+        document.getElementById("my-teams").hidden = true;
+        document.getElementById("team-or-label").textContent = "Crée ou rejoins une équipe";
+    }
+}
+
+function showTeamError(msg) {
+    const el = document.getElementById("team-error");
+    el.textContent = msg;
+    el.hidden = false;
+}
+
+async function createTeam() {
+    const name = document.getElementById("new-team-name").value.trim();
+    if (!name) return;
+
+    const res = await fetch(`${API}/api/teams`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, user_name: username }),
+    });
+    const team = await res.json();
+    setCurrentTeam(team);
     showMain();
 }
+
+async function joinTeamFromCode() {
+    const code = document.getElementById("join-code-input").value.trim();
+    if (!code) return;
+
+    const res = await fetch(`${API}/api/teams/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invite_code: code, user_name: username }),
+    });
+
+    if (res.status === 404) { showTeamError("Code d'invitation invalide"); return; }
+    if (res.status === 409) { showTeamError("Ce prénom est déjà pris dans cette équipe"); return; }
+
+    const team = await res.json();
+    setCurrentTeam(team);
+    showMain();
+}
+
+async function autoJoin(code) {
+    const res = await fetch(`${API}/api/teams/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invite_code: code, user_name: username }),
+    });
+
+    if (res.ok) {
+        const team = await res.json();
+        setCurrentTeam(team);
+        window.history.replaceState({}, "", "/");
+        showMain();
+    } else if (res.status === 409) {
+        // Already a member — just enter the team
+        const teamRes = await fetch(`${API}/api/teams/join`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ invite_code: code, user_name: username }),
+        });
+        // If username taken, they're already in — find the team from our list or fetch it
+        window.history.replaceState({}, "", "/");
+        showLoginScreen();
+        showTeamError("Ce prénom est déjà pris dans cette équipe. Choisis un autre prénom.");
+    } else {
+        window.history.replaceState({}, "", "/");
+        showLoginScreen();
+        showTeamError("Code d'invitation invalide");
+    }
+}
+
+async function enterTeam(teamId) {
+    const res = await fetch(`${API}/api/teams/${teamId}`);
+    if (!res.ok) {
+        teams = teams.filter((t) => t.id !== teamId);
+        saveTeams();
+        showLoginScreen();
+        return;
+    }
+    const team = await res.json();
+    setCurrentTeam(team);
+    showMain();
+}
+
+// --- Main app ---
 
 function showMain() {
     document.getElementById("login-screen").hidden = true;
     document.getElementById("main-screen").hidden = false;
-    document.getElementById("user-avatar").textContent = username[0].toUpperCase();
+    document.getElementById("header-switch").textContent = username[0].toUpperCase();
+    document.getElementById("header-team").textContent = currentTeam.name;
     switchTab("vote");
+}
+
+function copyInviteLink() {
+    if (!currentTeam) return;
+    const link = `${window.location.origin}/?join=${currentTeam.invite_code}`;
+    navigator.clipboard.writeText(link).then(() => {
+        const btn = document.getElementById("header-invite");
+        btn.textContent = "✓";
+        setTimeout(() => { btn.textContent = "📋"; }, 1500);
+    });
 }
 
 // --- Tabs ---
@@ -80,8 +281,8 @@ function switchTab(tab) {
 
 async function loadVotePage() {
     [restaurants, votes] = await Promise.all([
-        fetch(`${API}/api/restaurants`).then((r) => r.json()),
-        fetch(`${API}/api/votes/${today}`).then((r) => r.json()),
+        fetch(`${API}/api/teams/${currentTeamId}/restaurants`).then((r) => r.json()),
+        fetch(`${API}/api/teams/${currentTeamId}/votes/${today}`).then((r) => r.json()),
     ]);
 
     const myVotes = votes[username] || [];
@@ -141,13 +342,13 @@ async function submitVotes() {
     if (selected.length === 0) return;
     const ids = selected.map((c) => c.dataset.id);
 
-    await fetch(`${API}/api/votes/${today}`, {
+    await fetch(`${API}/api/teams/${currentTeamId}/votes/${today}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_name: username, restaurant_ids: ids }),
     });
 
-    votes = await fetch(`${API}/api/votes/${today}`).then((r) => r.json());
+    votes = await fetch(`${API}/api/teams/${currentTeamId}/votes/${today}`).then((r) => r.json());
     hasSubmitted = true;
 
     const matches = getMatches();
@@ -233,8 +434,8 @@ function updateToggles() {
 
 async function loadResultsPage() {
     [restaurants, votes] = await Promise.all([
-        fetch(`${API}/api/restaurants`).then((r) => r.json()),
-        fetch(`${API}/api/votes/${today}`).then((r) => r.json()),
+        fetch(`${API}/api/teams/${currentTeamId}/restaurants`).then((r) => r.json()),
+        fetch(`${API}/api/teams/${currentTeamId}/votes/${today}`).then((r) => r.json()),
     ]);
 
     const matches = getMatches();
@@ -320,7 +521,7 @@ async function addRestaurant() {
     const name = input.value.trim();
     if (!name) return;
 
-    await fetch(`${API}/api/restaurants`, {
+    await fetch(`${API}/api/teams/${currentTeamId}/restaurants`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
@@ -331,7 +532,7 @@ async function addRestaurant() {
 }
 
 async function loadRestaurantsPage() {
-    restaurants = await fetch(`${API}/api/restaurants`).then((r) => r.json());
+    restaurants = await fetch(`${API}/api/teams/${currentTeamId}/restaurants`).then((r) => r.json());
     const container = document.getElementById("restaurant-list");
     container.innerHTML = "";
 
@@ -398,7 +599,7 @@ function openEditModal(id) {
                 body: JSON.stringify({ tags: document.getElementById("modal-tags").value }),
             });
         } else {
-            await fetch(`${API}/api/restaurants/${id}`, {
+            await fetch(`${API}/api/teams/${currentTeamId}/restaurants/${id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -416,7 +617,7 @@ function openEditModal(id) {
     if (deleteBtn) {
         deleteBtn.addEventListener("click", async () => {
             if (!confirm("Supprimer ce restaurant ?")) return;
-            await fetch(`${API}/api/restaurants/${id}`, { method: "DELETE" });
+            await fetch(`${API}/api/teams/${currentTeamId}/restaurants/${id}`, { method: "DELETE" });
             document.getElementById("edit-overlay").hidden = true;
             loadRestaurantsPage();
         });

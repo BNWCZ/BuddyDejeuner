@@ -13,16 +13,40 @@
     <div class="app-wrapper">
         <div class="app-container">
 
-            <!-- LOGIN -->
+            <!-- LOGIN / TEAM SELECTION -->
             <div id="login-screen" class="screen">
                 <div class="login-content">
                     <div class="login-day-tag" id="login-day-tag"></div>
                     <div class="login-title">ON MANGE<br>OÙ ?!</div>
                     <div class="login-subtitle">Trouve ta team déjeuner<br>entre collègues</div>
-                    <div class="login-form">
+
+                    <!-- Step 1: Username -->
+                    <div id="step-username" class="login-form">
                         <input type="text" id="username-input" placeholder="Ton prénom" class="bd-input login-input">
                         <div id="login-btn" class="bd-btn bd-btn-primary">C'EST PARTI →</div>
                     </div>
+
+                    <!-- Step 2: Team selection (shown after username) -->
+                    <div id="step-team" class="login-form" hidden>
+                        <div id="team-error" class="team-error" hidden></div>
+
+                        <!-- Existing teams list -->
+                        <div id="my-teams" hidden>
+                            <div class="team-section-title">Tes équipes</div>
+                            <div id="team-list" class="team-list"></div>
+                        </div>
+
+                        <!-- Create or join -->
+                        <div class="team-section-title" id="team-or-label">Crée ou rejoins une équipe</div>
+                        <input type="text" id="new-team-name" placeholder="Nom de l'équipe" class="bd-input login-input">
+                        <div id="create-team-btn" class="bd-btn bd-btn-primary">CRÉER UNE ÉQUIPE</div>
+
+                        <div class="team-divider">ou</div>
+
+                        <input type="text" id="join-code-input" placeholder="Code d'invitation" class="bd-input login-input" style="text-transform:uppercase">
+                        <div id="join-team-btn" class="bd-btn bd-btn-tomato" style="margin-top:0">REJOINDRE</div>
+                    </div>
+
                     <div class="login-brand">BUDDY<span class="brand-accent">DÉJEUNER</span></div>
                 </div>
             </div>
@@ -32,10 +56,14 @@
 
                 <!-- Header -->
                 <div class="header">
-                    <div class="header-brand">BUDDY<span class="brand-accent">DÉJ</span></div>
+                    <div class="header-left">
+                        <div class="header-brand">BUDDY<span class="brand-accent">DÉJ</span></div>
+                        <div id="header-team" class="team-name-badge"></div>
+                    </div>
                     <div class="header-right">
                         <span class="day-badge" id="header-day"></span>
-                        <div class="user-avatar" id="user-avatar"></div>
+                        <div id="header-invite" class="invite-btn" title="Partager le code d'invitation">📋</div>
+                        <div id="header-switch" class="user-avatar" style="cursor:pointer" title="Changer d'équipe"></div>
                     </div>
                 </div>
 

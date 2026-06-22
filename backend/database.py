@@ -1,34 +1,46 @@
-import json
+import secrets
 import sqlite3
 import uuid
 from datetime import date
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "buddydejeuner.db"
-SEED_FILE = Path(__file__).resolve().parent.parent / "data" / "restaurants.json"
 
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 
 def init_db():
     conn = get_db()
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS teams (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            invite_code TEXT UNIQUE NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS team_members (
+            team_id TEXT NOT NULL,
+            user_name TEXT NOT NULL,
+            PRIMARY KEY (team_id, user_name)
+        );
         CREATE TABLE IF NOT EXISTS restaurants (
             id TEXT PRIMARY KEY,
+            team_id TEXT NOT NULL,
             name TEXT NOT NULL,
             address TEXT DEFAULT '',
             tags TEXT DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS votes (
             date TEXT NOT NULL,
+            team_id TEXT NOT NULL,
             user_name TEXT NOT NULL,
             restaurant_id TEXT NOT NULL,
-            PRIMARY KEY (date, user_name, restaurant_id)
+            PRIMARY KEY (date, team_id, user_name, restaurant_id)
         );
         CREATE TABLE IF NOT EXISTS foodtruck_cache (
             date TEXT NOT NULL,
@@ -39,34 +51,68 @@ def init_db():
             PRIMARY KEY (date, id)
         );
     """)
-
-    # Seed from JSON if table is empty and seed file exists
-    count = conn.execute("SELECT COUNT(*) FROM restaurants").fetchone()[0]
-    if count == 0 and SEED_FILE.exists():
-        restaurants = json.loads(SEED_FILE.read_text(encoding="utf-8"))
-        for r in restaurants:
-            tags = ", ".join(r.get("tags", []))
-            conn.execute(
-                "INSERT INTO restaurants (id, name, address, tags) VALUES (?, ?, ?, ?)",
-                (r["id"], r["name"], r.get("address", ""), tags),
-            )
     conn.commit()
     conn.close()
 
 
-# --- Restaurants ---
+# --- Teams ---
 
-def get_restaurants():
+def create_team(name, user_name):
+    team_id = str(uuid.uuid4())[:8]
+    invite_code = secrets.token_hex(3).upper()
     conn = get_db()
-    rows = conn.execute("SELECT * FROM restaurants").fetchall()
+    conn.execute("INSERT INTO teams (id, name, invite_code) VALUES (?, ?, ?)", (team_id, name.strip(), invite_code))
+    conn.execute("INSERT INTO team_members (team_id, user_name) VALUES (?, ?)", (team_id, user_name.strip()))
+    conn.commit()
+    conn.close()
+    return {"id": team_id, "name": name.strip(), "invite_code": invite_code}
+
+
+def join_team(invite_code, user_name):
+    conn = get_db()
+    team = conn.execute("SELECT * FROM teams WHERE invite_code=?", (invite_code.strip().upper(),)).fetchone()
+    if not team:
+        conn.close()
+        return None
+
+    existing = conn.execute(
+        "SELECT 1 FROM team_members WHERE team_id=? AND user_name=?",
+        (team["id"], user_name.strip()),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return {"error": "username_taken"}
+
+    conn.execute("INSERT INTO team_members (team_id, user_name) VALUES (?, ?)", (team["id"], user_name.strip()))
+    conn.commit()
+    conn.close()
+    return {"id": team["id"], "name": team["name"], "invite_code": team["invite_code"]}
+
+
+def get_team(team_id):
+    conn = get_db()
+    team = conn.execute("SELECT * FROM teams WHERE id=?", (team_id,)).fetchone()
+    if not team:
+        conn.close()
+        return None
+    members = conn.execute("SELECT user_name FROM team_members WHERE team_id=?", (team_id,)).fetchall()
+    conn.close()
+    return {"id": team["id"], "name": team["name"], "invite_code": team["invite_code"], "members": [m["user_name"] for m in members]}
+
+
+# --- Restaurants (team-scoped) ---
+
+def get_restaurants(team_id):
+    conn = get_db()
+    rows = conn.execute("SELECT id, name, address, tags FROM restaurants WHERE team_id=?", (team_id,)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def add_restaurant(name):
+def add_restaurant(team_id, name):
     rid = str(uuid.uuid4())[:8]
     conn = get_db()
-    conn.execute("INSERT INTO restaurants (id, name) VALUES (?, ?)", (rid, name.strip()))
+    conn.execute("INSERT INTO restaurants (id, team_id, name) VALUES (?, ?, ?)", (rid, team_id, name.strip()))
     conn.commit()
     conn.close()
     return rid
@@ -89,13 +135,16 @@ def delete_restaurant(rid):
     conn.close()
 
 
-# --- Votes ---
+# --- Votes (team-scoped) ---
 
-def get_votes(vote_date=None):
+def get_votes(team_id, vote_date=None):
     if vote_date is None:
         vote_date = date.today().isoformat()
     conn = get_db()
-    rows = conn.execute("SELECT user_name, restaurant_id FROM votes WHERE date=?", (vote_date,)).fetchall()
+    rows = conn.execute(
+        "SELECT user_name, restaurant_id FROM votes WHERE team_id=? AND date=?",
+        (team_id, vote_date),
+    ).fetchall()
     conn.close()
     result = {}
     for row in rows:
@@ -103,21 +152,21 @@ def get_votes(vote_date=None):
     return result
 
 
-def set_votes(user_name, restaurant_ids, vote_date=None):
+def set_votes(team_id, user_name, restaurant_ids, vote_date=None):
     if vote_date is None:
         vote_date = date.today().isoformat()
     conn = get_db()
-    conn.execute("DELETE FROM votes WHERE date=? AND user_name=?", (vote_date, user_name))
+    conn.execute("DELETE FROM votes WHERE team_id=? AND date=? AND user_name=?", (team_id, vote_date, user_name))
     for rid in restaurant_ids:
         conn.execute(
-            "INSERT INTO votes (date, user_name, restaurant_id) VALUES (?, ?, ?)",
-            (vote_date, user_name, rid),
+            "INSERT INTO votes (date, team_id, user_name, restaurant_id) VALUES (?, ?, ?, ?)",
+            (vote_date, team_id, user_name, rid),
         )
     conn.commit()
     conn.close()
 
 
-# --- Food truck cache ---
+# --- Food truck cache (global) ---
 
 def get_cached_foodtrucks(cache_date=None):
     if cache_date is None:

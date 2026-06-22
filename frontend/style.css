@@ -48,10 +48,14 @@ input:focus { outline: none; box-shadow: 0 0 0 3px rgba(244,180,62,.4); }
 
 /* Header */
 .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; border-bottom: 2px solid var(--ink); flex: none; }
+.header-left { display: flex; align-items: center; gap: 8px; }
 .header-brand { font: 800 17px var(--font-head); color: var(--ink); letter-spacing: -.3px; }
 .header-right { display: flex; align-items: center; gap: 10px; }
 .day-badge { font: 700 11px var(--font-head); color: var(--ink); background: var(--cream-dark); padding: 4px 12px; border-radius: 20px; }
 .user-avatar { width: 32px; height: 32px; border-radius: 10px; background: var(--tomato); color: #fff; font: 800 14px var(--font-head); display: flex; align-items: center; justify-content: center; }
+.team-name-badge { font: 700 11px var(--font-head); color: #fff; background: var(--ink); padding: 4px 10px; border-radius: 20px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.invite-btn { width: 32px; height: 32px; border-radius: 10px; background: var(--cream-dark); border: 2px solid var(--ink); display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; }
+.invite-btn:hover { background: var(--mustard); }
 
 /* Content */
 .content-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -166,6 +170,17 @@ input:focus { outline: none; box-shadow: 0 0 0 3px rgba(244,180,62,.4); }
 /* Edit button in restaurant list */
 .edit-btn { font: 800 11px var(--font-head); padding: 6px 12px; border-radius: 20px; background: transparent; color: var(--ink); border: 2px solid var(--ink); cursor: pointer; flex: none; }
 .edit-btn:hover { background: var(--mustard); }
+
+/* Team selection */
+.team-section-title { font: 800 13px var(--font-head); color: var(--muted); margin-bottom: 8px; text-align: center; }
+.team-divider { font: 700 13px var(--font-body); color: var(--muted); text-align: center; margin: 8px 0; }
+.team-error { font: 600 13px var(--font-body); color: var(--tomato); text-align: center; padding: 8px; background: #fff; border: 2px solid var(--tomato); border-radius: 10px; margin-bottom: 8px; }
+.team-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.team-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border: 2px solid var(--ink); border-radius: 14px; cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.team-item:hover { transform: translate(-1px,-1px); box-shadow: 3px 3px 0 var(--ink); }
+.team-item:active { transform: translate(2px,2px); box-shadow: none; }
+.team-item-name { font: 800 14px var(--font-head); color: var(--ink); flex: 1; }
+.team-item-arrow { font: 800 16px var(--font-head); color: var(--muted); }
 
 /* Animations */
 @keyframes bd-fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
