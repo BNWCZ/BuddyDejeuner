@@ -48,6 +48,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const joinCode = params.get("join");
 
     if (joinCode) {
+        setupAppHandlers();
         // Join flow: need username first, then auto-join
         if (username) {
             autoJoin(joinCode);
