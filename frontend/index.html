@@ -20,23 +20,52 @@
                     <div class="login-title">ON MANGE<br>OÙ ?!</div>
                     <div class="login-subtitle">Trouve ta team déjeuner<br>entre collègues</div>
 
-                    <!-- Step 1: Username -->
-                    <div id="step-username" class="login-form">
-                        <input type="text" id="username-input" placeholder="Ton prénom" class="bd-input login-input">
-                        <div id="login-btn" class="bd-btn bd-btn-primary">C'EST PARTI →</div>
+                    <!-- Step 1: New user or battletag login -->
+                    <div id="step-login" class="login-form">
+                        <input type="text" id="login-input" placeholder="Ton prénom" class="bd-input login-input">
+                        <div id="login-btn" class="bd-btn bd-btn-primary">CRÉER MON COMPTE &rarr;</div>
+                        <div id="login-error" class="team-error" hidden></div>
+                        <div id="recovery-link" class="recovery-link">Déjà un compte ?</div>
                     </div>
 
-                    <!-- Step 2: Team selection (shown after username) -->
+                    <!-- Step 1b: Recovery -->
+                    <div id="step-recover" class="login-form" hidden>
+                        <div class="team-section-title">Retrouve ton compte</div>
+
+                        <input type="text" id="recover-search-input" placeholder="Nom de l'équipe ou code d'invitation" class="bd-input login-input">
+                        <div id="recover-error" class="team-error" hidden></div>
+
+                        <div id="recover-members" hidden>
+                            <div class="team-section-title" id="recover-team-name"></div>
+                            <div class="team-section-sub">Clique sur ton nom</div>
+                            <div id="recover-member-list" class="team-list"></div>
+                        </div>
+
+                        <div class="team-divider">ou</div>
+
+                        <input type="text" id="recover-id-input" placeholder="Marie#1234" class="bd-input login-input">
+                        <div id="recover-id-btn" class="bd-btn bd-btn-primary">ME CONNECTER</div>
+
+                        <div id="back-to-login" class="recovery-link">&larr; Nouveau compte</div>
+                    </div>
+
+                    <!-- Step: Battletag reveal -->
+                    <div id="step-tag-reveal" class="login-form" hidden>
+                        <div class="team-section-title">Ton identifiant secret</div>
+                        <div class="tag-reveal" id="tag-reveal-value"></div>
+                        <div class="tag-reveal-hint">Note-le ! Il te permet de retrouver ton compte.</div>
+                        <div id="tag-reveal-continue" class="bd-btn bd-btn-primary">CONTINUER &rarr;</div>
+                    </div>
+
+                    <!-- Step 2: Team selection -->
                     <div id="step-team" class="login-form" hidden>
                         <div id="team-error" class="team-error" hidden></div>
 
-                        <!-- Existing teams list -->
                         <div id="my-teams" hidden>
                             <div class="team-section-title">Tes équipes</div>
                             <div id="team-list" class="team-list"></div>
                         </div>
 
-                        <!-- Create or join -->
                         <div class="team-section-title" id="team-or-label">Crée ou rejoins une équipe</div>
                         <input type="text" id="new-team-name" placeholder="Nom de l'équipe" class="bd-input login-input">
                         <div id="create-team-btn" class="bd-btn bd-btn-primary">CRÉER UNE ÉQUIPE</div>
@@ -63,8 +92,23 @@
                     <div class="header-right">
                         <span class="day-badge" id="header-day"></span>
                         <div id="header-invite" class="invite-btn" title="Partager le code d'invitation">📋</div>
-                        <div id="header-switch" class="user-avatar" style="cursor:pointer" title="Changer d'équipe"></div>
+                        <div id="header-switch" class="user-avatar" style="cursor:pointer" title="Menu"></div>
                     </div>
+                </div>
+
+                <!-- User Menu -->
+                <div id="user-menu" class="user-menu" hidden>
+                    <div class="user-menu-header">
+                        <div class="user-menu-name" id="menu-display-name"></div>
+                        <div class="user-menu-team" id="menu-team-name"></div>
+                    </div>
+                    <div class="user-menu-separator"></div>
+                    <div class="user-menu-item" id="menu-copy-tag"></div>
+                    <div class="user-menu-separator"></div>
+                    <div class="user-menu-item" id="menu-switch-team">Changer d'équipe</div>
+                    <div class="user-menu-item" id="menu-admin" hidden>Gérer l'équipe</div>
+                    <div class="user-menu-separator"></div>
+                    <div class="user-menu-item user-menu-danger" id="menu-logout">Se déconnecter</div>
                 </div>
 
                 <!-- Scrollable content -->
@@ -76,7 +120,7 @@
                             <div class="page-title">ON MANGE<br>OÙ ?!</div>
                             <div class="page-subtitle" id="vote-subtitle"></div>
                             <div id="vote-list" class="card-list"></div>
-                            <div id="vote-submit" class="bd-btn bd-btn-tomato">ENVOYER MES VOTES →</div>
+                            <div id="vote-submit" class="bd-btn bd-btn-tomato">ENVOYER MES VOTES &rarr;</div>
                         </div>
                     </section>
 
@@ -135,7 +179,7 @@
                     <div class="match-desc">Des collègues ont flashé sur les mêmes restos que toi</div>
                 </div>
                 <div class="match-reveal-actions">
-                    <div id="reveal-browse-btn" class="bd-btn bd-btn-primary">VOIR TOUS LES MATCHS →</div>
+                    <div id="reveal-browse-btn" class="bd-btn bd-btn-primary">VOIR TOUS LES MATCHS &rarr;</div>
                     <div id="reveal-podium-btn" class="match-skip">Voir le podium</div>
                 </div>
             </div>
@@ -152,7 +196,39 @@
                 <div class="match-browse-sub">Les collègues qui ont voté comme toi</div>
                 <div id="match-list" class="match-browse-list"></div>
                 <div class="match-browse-footer">
-                    <div id="browse-podium-btn" class="bd-btn bd-btn-dark">← VOIR LE PODIUM</div>
+                    <div id="browse-podium-btn" class="bd-btn bd-btn-dark">&larr; VOIR LE PODIUM</div>
+                </div>
+            </div>
+
+            <!-- ADMIN PANEL OVERLAY -->
+            <div id="admin-overlay" class="overlay overlay-cream" hidden>
+                <div class="match-browse-header">
+                    <div class="match-browse-title">
+                        <span id="admin-title">Gestion</span>
+                    </div>
+                    <div id="admin-close" class="close-btn">✕</div>
+                </div>
+                <div class="admin-content">
+                    <div class="team-section-title" style="text-align:left">Membres</div>
+                    <div id="admin-member-list" class="team-list"></div>
+
+                    <div class="team-section-title" style="text-align:left;margin-top:24px">Paramètres</div>
+                    <label class="admin-label">Nom de l'équipe</label>
+                    <div class="add-bar" style="margin-top:0">
+                        <input type="text" id="admin-team-name-input" class="bd-input">
+                        <div id="admin-rename-btn" class="bd-btn bd-btn-primary add-btn">OK</div>
+                    </div>
+
+                    <div style="margin-top:16px">
+                        <label class="admin-label">Code d'invitation</label>
+                        <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+                            <strong id="admin-invite-code" style="font-size:18px;letter-spacing:2px"></strong>
+                            <div id="admin-copy-code-btn" class="bd-btn bd-btn-primary" style="font-size:12px;padding:6px 12px">COPIER</div>
+                            <div id="admin-regen-btn" class="bd-btn bd-btn-primary" style="font-size:12px;padding:6px 12px">RÉGÉNÉRER</div>
+                        </div>
+                    </div>
+
+                    <div id="admin-delete-btn" class="bd-btn bd-btn-dark" style="margin-top:32px">SUPPRIMER L'ÉQUIPE</div>
                 </div>
             </div>
 
@@ -171,6 +247,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=7"></script>
 </body>
 </html>

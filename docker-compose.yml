@@ -1,0 +1,13 @@
+services:
+  buddydej:
+    build: .
+    container_name: buddydej
+    networks:
+      - net_buddydej
+    volumes:
+      - /opt/docker/buddydej/data:/app/data
+    restart: unless-stopped
+
+networks:
+  net_buddydej:
+    name: net_buddydej

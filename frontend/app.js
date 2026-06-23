@@ -3,14 +3,17 @@ const today = new Date().toISOString().slice(0, 10);
 const DAYS_FR = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 const COLORS = ["#F4B43E", "#EE5535", "#7F8B55", "#C98C2E", "#9B5B6B", "#6B5B95", "#556B2F", "#8B6C5C", "#BE5635"];
 
-let username = localStorage.getItem("buddydejeuner_username") || "";
-let teams = JSON.parse(localStorage.getItem("buddydejeuner_teams") || "[]");
+let userId = localStorage.getItem("buddydejeuner_user_id") || "";
 let currentTeamId = localStorage.getItem("buddydejeuner_current_team") || "";
 let currentTeam = null;
+let displayName = "";
+let isAdmin = false;
+let teams = [];
 let restaurants = [];
 let votes = {};
 let currentResultView = "restaurant";
 let hasSubmitted = false;
+let pendingJoinCode = "";
 
 function colorFor(name) {
     let h = 0;
@@ -22,73 +25,116 @@ function tagsOf(r) {
     return (r.tags || "").split(", ").filter(Boolean);
 }
 
-function saveTeams() {
-    localStorage.setItem("buddydejeuner_teams", JSON.stringify(teams));
-}
-
-function setCurrentTeam(team) {
-    currentTeam = team;
-    currentTeamId = team.id;
-    localStorage.setItem("buddydejeuner_current_team", team.id);
-    if (!teams.find((t) => t.id === team.id)) {
-        teams.push({ id: team.id, name: team.name, invite_code: team.invite_code });
-        saveTeams();
-    }
+function battletag_name() {
+    return userId.split("#")[0];
 }
 
 // --- Init ---
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     const dayName = DAYS_FR[new Date().getDay()];
     document.getElementById("login-day-tag").textContent = dayName.toUpperCase() + " MIDI";
     document.getElementById("header-day").textContent = dayName;
 
-    // Check for ?join=CODE in URL
+    setupLoginHandlers();
+    setupAppHandlers();
+
     const params = new URLSearchParams(window.location.search);
     const joinCode = params.get("join");
 
     if (joinCode) {
-        setupAppHandlers();
-        // Join flow: need username first, then auto-join
-        if (username) {
-            autoJoin(joinCode);
+        window.history.replaceState({}, "", "/");
+        if (userId) {
+            const ok = await loginWithUserId();
+            if (ok) {
+                await autoJoin(joinCode);
+            } else {
+                pendingJoinCode = joinCode;
+                showLoginScreen();
+            }
         } else {
+            pendingJoinCode = joinCode;
             showLoginScreen();
-            document.getElementById("login-btn").addEventListener("click", () => {
-                if (setUsername()) autoJoin(joinCode);
-            });
-            document.getElementById("username-input").addEventListener("keydown", (e) => {
-                if (e.key === "Enter" && setUsername()) autoJoin(joinCode);
-            });
         }
         return;
     }
 
-    if (username && currentTeamId) {
-        enterTeam(currentTeamId);
-    } else if (username) {
-        showTeamStep();
+    if (userId) {
+        const ok = await loginWithUserId();
+        if (ok && currentTeamId) {
+            await enterTeam(currentTeamId);
+        } else if (ok) {
+            showTeamStep();
+        } else {
+            showLoginScreen();
+        }
     } else {
         showLoginScreen();
     }
-
-    setupLoginHandlers();
-    setupAppHandlers();
 });
+
+async function loginWithUserId() {
+    const res = await fetch(`${API}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+    });
+    if (!res.ok) {
+        userId = "";
+        localStorage.removeItem("buddydejeuner_user_id");
+        return false;
+    }
+    const data = await res.json();
+    teams = data.teams;
+    return true;
+}
+
+// --- Login screen ---
 
 function showLoginScreen() {
     document.getElementById("login-screen").hidden = false;
     document.getElementById("main-screen").hidden = true;
-    document.getElementById("step-username").hidden = false;
+    document.getElementById("step-login").hidden = false;
+    document.getElementById("step-recover").hidden = true;
+    document.getElementById("step-tag-reveal").hidden = true;
     document.getElementById("step-team").hidden = true;
+    document.getElementById("login-error").hidden = true;
 }
 
 function setupLoginHandlers() {
-    document.getElementById("login-btn").addEventListener("click", () => {
-        if (setUsername()) showTeamStep();
+    document.getElementById("login-btn").addEventListener("click", handleLogin);
+    document.getElementById("login-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") handleLogin();
     });
-    document.getElementById("username-input").addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && setUsername()) showTeamStep();
+
+    document.getElementById("recovery-link").addEventListener("click", showRecovery);
+    document.getElementById("back-to-login").addEventListener("click", showLoginScreen);
+
+    document.getElementById("recover-search-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") recoverSearch();
+    });
+    document.getElementById("recover-search-input").addEventListener("input", () => {
+        document.getElementById("recover-members").hidden = true;
+        document.getElementById("recover-error").hidden = true;
+    });
+    let recoverDebounce = null;
+    document.getElementById("recover-search-input").addEventListener("input", () => {
+        clearTimeout(recoverDebounce);
+        recoverDebounce = setTimeout(recoverSearch, 500);
+    });
+    document.getElementById("recover-id-btn").addEventListener("click", recoverById);
+    document.getElementById("recover-id-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") recoverById();
+    });
+
+    document.getElementById("tag-reveal-continue").addEventListener("click", () => {
+        document.getElementById("step-tag-reveal").hidden = true;
+        if (pendingJoinCode) {
+            autoJoin(pendingJoinCode);
+            pendingJoinCode = "";
+        } else {
+            showTeamStep();
+        }
     });
 
     document.getElementById("create-team-btn").addEventListener("click", createTeam);
@@ -97,49 +143,198 @@ function setupLoginHandlers() {
     document.getElementById("join-code-input").addEventListener("keydown", (e) => { if (e.key === "Enter") joinTeamFromCode(); });
 }
 
-function setupAppHandlers() {
-    document.querySelectorAll(".tab-bar-btn").forEach((btn) => {
-        btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+async function handleLogin() {
+    const input = document.getElementById("login-input").value.trim();
+    if (!input) return;
+    document.getElementById("login-error").hidden = true;
+
+    if (input.includes("#")) {
+        const res = await fetch(`${API}/api/auth/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: input }),
+        });
+        if (!res.ok) {
+            showLoginError("Identifiant inconnu");
+            return;
+        }
+        const data = await res.json();
+        userId = data.id;
+        teams = data.teams;
+        localStorage.setItem("buddydejeuner_user_id", userId);
+        if (pendingJoinCode) {
+            await autoJoin(pendingJoinCode);
+            pendingJoinCode = "";
+        } else {
+            showTeamStep();
+        }
+    } else {
+        const res = await fetch(`${API}/api/users`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: input }),
+        });
+        const data = await res.json();
+        userId = data.id;
+        teams = [];
+        localStorage.setItem("buddydejeuner_user_id", userId);
+        document.getElementById("step-login").hidden = true;
+        document.getElementById("tag-reveal-value").textContent = userId;
+        document.getElementById("step-tag-reveal").hidden = false;
+    }
+}
+
+function showLoginError(msg) {
+    const el = document.getElementById("login-error");
+    el.textContent = msg;
+    el.hidden = false;
+}
+
+// --- Recovery ---
+
+function showRecovery() {
+    document.getElementById("step-login").hidden = true;
+    document.getElementById("step-recover").hidden = false;
+    document.getElementById("recover-error").hidden = true;
+    document.getElementById("recover-members").hidden = true;
+}
+
+function showRecoverError(msg) {
+    const el = document.getElementById("recover-error");
+    el.textContent = msg;
+    el.hidden = false;
+}
+
+async function recoverSearch() {
+    const input = document.getElementById("recover-search-input").value.trim();
+    if (!input) return;
+    document.getElementById("recover-error").hidden = true;
+    document.getElementById("recover-members").hidden = true;
+
+    const isCode = /^[A-Fa-f0-9]{6}$/.test(input);
+    const body = isCode ? { invite_code: input } : { team_name: input };
+
+    const res = await fetch(`${API}/api/auth/recover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
     });
 
-    document.getElementById("vote-submit").addEventListener("click", submitVotes);
-    document.getElementById("add-restaurant-btn").addEventListener("click", addRestaurant);
-    document.getElementById("new-restaurant-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addRestaurant(); });
+    if (res.status === 404) { showRecoverError(isCode ? "Code d'invitation invalide" : "Aucune équipe trouvée"); return; }
+    if (res.status === 409) { showRecoverError("Plusieurs équipes avec ce nom. Utilise le code d'invitation."); return; }
+    if (!res.ok) { showRecoverError("Erreur"); return; }
 
-    document.getElementById("toggle-resto").addEventListener("click", () => { currentResultView = "restaurant"; updateToggles(); renderResults(); });
-    document.getElementById("toggle-col").addEventListener("click", () => { currentResultView = "person"; updateToggles(); renderResults(); });
+    showRecoveryMembers(await res.json());
+}
 
-    document.getElementById("reveal-browse-btn").addEventListener("click", showMatchBrowse);
-    document.getElementById("reveal-podium-btn").addEventListener("click", goToPodium);
-    document.getElementById("browse-podium-btn").addEventListener("click", goToPodium);
-    document.getElementById("browse-close").addEventListener("click", goToPodium);
-    document.getElementById("modal-close").addEventListener("click", () => { document.getElementById("edit-overlay").hidden = true; });
+async function recoverById() {
+    const input = document.getElementById("recover-id-input").value.trim();
+    if (!input) return;
+    document.getElementById("recover-error").hidden = true;
 
-    document.getElementById("header-invite").addEventListener("click", copyInviteLink);
-    document.getElementById("header-switch").addEventListener("click", () => {
-        currentTeamId = "";
-        localStorage.removeItem("buddydejeuner_current_team");
-        document.getElementById("main-screen").hidden = true;
-        document.getElementById("login-screen").hidden = false;
-        document.getElementById("step-username").hidden = true;
-        showTeamStep();
+    const res = await fetch(`${API}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: input }),
+    });
+
+    if (!res.ok) { showRecoverError("Identifiant inconnu"); return; }
+
+    const data = await res.json();
+    userId = data.id;
+    teams = data.teams;
+    localStorage.setItem("buddydejeuner_user_id", userId);
+    showTeamStep();
+}
+
+function showRecoveryMembers(data) {
+    document.getElementById("recover-team-name").textContent = data.team_name;
+    const list = document.getElementById("recover-member-list");
+    list.innerHTML = "";
+    for (const m of data.members) {
+        list.innerHTML += `
+            <div class="team-item" data-team-id="${data.team_id}" data-name="${m.display_name}" data-admin="${m.is_admin ? 1 : 0}">
+                <div class="team-item-name">${m.display_name}${m.is_admin ? ' <span class="admin-member-badge">ADMIN</span>' : ""}</div>
+                <div class="team-item-arrow">&rarr;</div>
+            </div>
+        `;
+    }
+    list.querySelectorAll(".team-item").forEach((item) => {
+        item.addEventListener("click", () => {
+            if (item.dataset.admin === "1") {
+                promptAdminRecovery(item.dataset.teamId, item.dataset.name);
+            } else {
+                confirmRecovery(item.dataset.teamId, item.dataset.name);
+            }
+        });
+    });
+    document.getElementById("recover-members").hidden = false;
+}
+
+function promptAdminRecovery(teamId, name) {
+    const list = document.getElementById("recover-member-list");
+    list.innerHTML = `
+        <div style="text-align:center;margin-bottom:8px">
+            <div class="team-section-title">Compte admin : saisis ton identifiant</div>
+        </div>
+        <input type="text" id="admin-recover-input" placeholder="Ex: ${name}#1234" class="bd-input login-input">
+        <div id="admin-recover-btn" class="bd-btn bd-btn-primary">CONFIRMER</div>
+        <div id="admin-recover-error" class="team-error" hidden></div>
+    `;
+    document.getElementById("admin-recover-btn").addEventListener("click", () => submitAdminRecovery(teamId, name));
+    document.getElementById("admin-recover-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitAdminRecovery(teamId, name);
     });
 }
 
-// --- Username ---
+async function submitAdminRecovery(teamId, name) {
+    const input = document.getElementById("admin-recover-input").value.trim();
+    if (!input) return;
 
-function setUsername() {
-    const input = document.getElementById("username-input");
-    username = input.value.trim();
-    if (!username) return false;
-    localStorage.setItem("buddydejeuner_username", username);
-    return true;
+    const res = await fetch(`${API}/api/auth/recover/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team_id: teamId, display_name: name, user_id: input }),
+    });
+
+    if (res.status === 403) {
+        const err = document.getElementById("admin-recover-error");
+        err.textContent = "Identifiant incorrect";
+        err.hidden = false;
+        return;
+    }
+    if (!res.ok) { showRecoverError("Erreur"); return; }
+
+    const data = await res.json();
+    userId = data.user_id;
+    teams = data.teams;
+    localStorage.setItem("buddydejeuner_user_id", userId);
+    await enterTeam(teamId);
+}
+
+async function confirmRecovery(teamId, name) {
+    const res = await fetch(`${API}/api/auth/recover/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ team_id: teamId, display_name: name }),
+    });
+    if (!res.ok) { showRecoverError("Erreur lors de la récupération"); return; }
+
+    const data = await res.json();
+    userId = data.user_id;
+    teams = data.teams;
+    localStorage.setItem("buddydejeuner_user_id", userId);
+    await enterTeam(teamId);
 }
 
 // --- Team selection ---
 
 function showTeamStep() {
-    document.getElementById("step-username").hidden = true;
+    document.getElementById("login-screen").hidden = false;
+    document.getElementById("main-screen").hidden = true;
+    document.getElementById("step-login").hidden = true;
+    document.getElementById("step-recover").hidden = true;
+    document.getElementById("step-tag-reveal").hidden = true;
     document.getElementById("step-team").hidden = false;
     document.getElementById("team-error").hidden = true;
 
@@ -152,7 +347,7 @@ function showTeamStep() {
             list.innerHTML += `
                 <div class="team-item" data-team-id="${t.id}">
                     <div class="team-item-name">${t.name}</div>
-                    <div class="team-item-arrow">→</div>
+                    <div class="team-item-arrow">&rarr;</div>
                 </div>
             `;
         }
@@ -178,58 +373,70 @@ async function createTeam() {
     const res = await fetch(`${API}/api/teams`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, user_name: username }),
+        body: JSON.stringify({ name, user_id: userId, display_name: battletag_name() }),
     });
     const team = await res.json();
-    setCurrentTeam(team);
-    showMain();
+    teams.push({ id: team.id, name: team.name, invite_code: team.invite_code, display_name: battletag_name(), is_admin: 1 });
+    await enterTeam(team.id);
 }
 
 async function joinTeamFromCode() {
     const code = document.getElementById("join-code-input").value.trim();
     if (!code) return;
 
+    const dn = battletag_name();
     const res = await fetch(`${API}/api/teams/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invite_code: code, user_name: username }),
+        body: JSON.stringify({ invite_code: code, user_id: userId, display_name: dn }),
     });
 
     if (res.status === 404) { showTeamError("Code d'invitation invalide"); return; }
-    if (res.status === 409) { showTeamError("Ce prénom est déjà pris dans cette équipe"); return; }
+    if (res.status === 409) {
+        const data = await res.json();
+        if (data.error === "already_member") {
+            showTeamError("Tu es déjà dans cette équipe");
+        } else {
+            showTeamError("Ce prénom est déjà pris dans cette équipe");
+        }
+        return;
+    }
 
     const team = await res.json();
-    setCurrentTeam(team);
-    showMain();
+    teams.push({ id: team.id, name: team.name, invite_code: team.invite_code, display_name: dn, is_admin: 0 });
+    await enterTeam(team.id);
 }
 
 async function autoJoin(code) {
+    const dn = battletag_name();
     const res = await fetch(`${API}/api/teams/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invite_code: code, user_name: username }),
+        body: JSON.stringify({ invite_code: code, user_id: userId, display_name: dn }),
     });
 
     if (res.ok) {
         const team = await res.json();
-        setCurrentTeam(team);
-        window.history.replaceState({}, "", "/");
-        showMain();
+        teams.push({ id: team.id, name: team.name, invite_code: team.invite_code, display_name: dn, is_admin: 0 });
+        await enterTeam(team.id);
     } else if (res.status === 409) {
-        // Already a member — just enter the team
-        const teamRes = await fetch(`${API}/api/teams/join`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ invite_code: code, user_name: username }),
-        });
-        // If username taken, they're already in — find the team from our list or fetch it
-        window.history.replaceState({}, "", "/");
-        showLoginScreen();
-        showTeamError("Ce prénom est déjà pris dans cette équipe. Choisis un autre prénom.");
+        const data = await res.json();
+        if (data.error === "already_member") {
+            await loginWithUserId();
+            const myTeam = teams.find((t) => t.invite_code === code.trim().toUpperCase());
+            if (myTeam) {
+                await enterTeam(myTeam.id);
+            } else {
+                showTeamStep();
+            }
+        } else {
+            showTeamStep();
+            showTeamError("Ce prénom est déjà pris dans cette équipe. Rejoins via le code d'invitation avec un autre prénom.");
+            document.getElementById("join-code-input").value = code;
+        }
     } else {
-        window.history.replaceState({}, "", "/");
         showLoginScreen();
-        showTeamError("Code d'invitation invalide");
+        showLoginError("Code d'invitation invalide");
     }
 }
 
@@ -237,12 +444,20 @@ async function enterTeam(teamId) {
     const res = await fetch(`${API}/api/teams/${teamId}`);
     if (!res.ok) {
         teams = teams.filter((t) => t.id !== teamId);
-        saveTeams();
-        showLoginScreen();
+        showTeamStep();
         return;
     }
     const team = await res.json();
-    setCurrentTeam(team);
+    currentTeam = team;
+    currentTeamId = team.id;
+    localStorage.setItem("buddydejeuner_current_team", team.id);
+
+    const myTeam = teams.find((t) => t.id === teamId);
+    if (myTeam) {
+        displayName = myTeam.display_name;
+        isAdmin = Boolean(myTeam.is_admin);
+    }
+
     showMain();
 }
 
@@ -251,9 +466,95 @@ async function enterTeam(teamId) {
 function showMain() {
     document.getElementById("login-screen").hidden = true;
     document.getElementById("main-screen").hidden = false;
-    document.getElementById("header-switch").textContent = username[0].toUpperCase();
+    document.getElementById("user-menu").hidden = true;
+    document.getElementById("header-switch").textContent = displayName[0].toUpperCase();
     document.getElementById("header-team").textContent = currentTeam.name;
+    document.getElementById("menu-admin").hidden = !isAdmin;
     switchTab("vote");
+}
+
+function setupAppHandlers() {
+    document.querySelectorAll(".tab-bar-btn").forEach((btn) => {
+        btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+
+    document.getElementById("vote-submit").addEventListener("click", submitVotes);
+    document.getElementById("add-restaurant-btn").addEventListener("click", addRestaurant);
+    document.getElementById("new-restaurant-name").addEventListener("keydown", (e) => { if (e.key === "Enter") addRestaurant(); });
+
+    document.getElementById("toggle-resto").addEventListener("click", () => { currentResultView = "restaurant"; updateToggles(); renderResults(); });
+    document.getElementById("toggle-col").addEventListener("click", () => { currentResultView = "person"; updateToggles(); renderResults(); });
+
+    document.getElementById("reveal-browse-btn").addEventListener("click", showMatchBrowse);
+    document.getElementById("reveal-podium-btn").addEventListener("click", goToPodium);
+    document.getElementById("browse-podium-btn").addEventListener("click", goToPodium);
+    document.getElementById("browse-close").addEventListener("click", goToPodium);
+    document.getElementById("modal-close").addEventListener("click", () => { document.getElementById("edit-overlay").hidden = true; });
+
+    document.getElementById("header-invite").addEventListener("click", copyInviteLink);
+    document.getElementById("header-switch").addEventListener("click", toggleUserMenu);
+
+    // User menu
+    document.getElementById("menu-copy-tag").addEventListener("click", () => {
+        navigator.clipboard.writeText(userId);
+        const el = document.getElementById("menu-copy-tag");
+        el.textContent = "Copié !";
+        setTimeout(() => { el.innerHTML = `Ton identifiant <span class="user-menu-tag">${userId}</span>`; }, 2000);
+    });
+    document.getElementById("menu-switch-team").addEventListener("click", () => {
+        document.getElementById("user-menu").hidden = true;
+        currentTeamId = "";
+        localStorage.removeItem("buddydejeuner_current_team");
+        document.getElementById("main-screen").hidden = true;
+        showTeamStep();
+    });
+    document.getElementById("menu-admin").addEventListener("click", () => {
+        document.getElementById("user-menu").hidden = true;
+        openAdminPanel();
+    });
+    document.getElementById("menu-logout").addEventListener("click", () => {
+        document.getElementById("user-menu").hidden = true;
+        userId = "";
+        currentTeamId = "";
+        teams = [];
+        localStorage.removeItem("buddydejeuner_user_id");
+        localStorage.removeItem("buddydejeuner_current_team");
+        showLoginScreen();
+    });
+
+    // Admin panel
+    document.getElementById("admin-close").addEventListener("click", () => { document.getElementById("admin-overlay").hidden = true; });
+    document.getElementById("admin-rename-btn").addEventListener("click", adminRename);
+    document.getElementById("admin-copy-code-btn").addEventListener("click", () => {
+        const code = document.getElementById("admin-invite-code").textContent;
+        navigator.clipboard.writeText(`${window.location.origin}/?join=${code}`);
+        const btn = document.getElementById("admin-copy-code-btn");
+        btn.textContent = "COPIÉ !";
+        setTimeout(() => { btn.textContent = "COPIER"; }, 2000);
+    });
+    document.getElementById("admin-regen-btn").addEventListener("click", adminRegenCode);
+    document.getElementById("admin-delete-btn").addEventListener("click", adminDeleteTeam);
+
+    // Close user menu when clicking outside
+    document.addEventListener("click", (e) => {
+        const menu = document.getElementById("user-menu");
+        const avatar = document.getElementById("header-switch");
+        if (!menu.hidden && !menu.contains(e.target) && !avatar.contains(e.target)) {
+            menu.hidden = true;
+        }
+    });
+}
+
+function toggleUserMenu() {
+    const menu = document.getElementById("user-menu");
+    if (!menu.hidden) {
+        menu.hidden = true;
+        return;
+    }
+    document.getElementById("menu-display-name").textContent = displayName;
+    document.getElementById("menu-team-name").textContent = currentTeam.name;
+    document.getElementById("menu-copy-tag").innerHTML = `Ton identifiant <span class="user-menu-tag">${userId}</span>`;
+    menu.hidden = false;
 }
 
 function copyInviteLink() {
@@ -264,6 +565,98 @@ function copyInviteLink() {
         btn.textContent = "✓";
         setTimeout(() => { btn.textContent = "📋"; }, 1500);
     });
+}
+
+// --- Admin panel ---
+
+async function openAdminPanel() {
+    const res = await fetch(`${API}/api/teams/${currentTeamId}/admin?user_id=${encodeURIComponent(userId)}`);
+    if (!res.ok) return;
+
+    const data = await res.json();
+    document.getElementById("admin-title").textContent = data.team.name;
+    document.getElementById("admin-team-name-input").value = data.team.name;
+    document.getElementById("admin-invite-code").textContent = data.team.invite_code;
+
+    const list = document.getElementById("admin-member-list");
+    list.innerHTML = "";
+    for (const m of data.members) {
+        list.innerHTML += `
+            <div class="admin-member">
+                <div class="admin-member-name">${m.display_name}</div>
+                ${m.is_admin ? '<span class="admin-member-badge">ADMIN</span>' : `<span class="admin-member-remove" data-name="${m.display_name}">Retirer</span>`}
+            </div>
+        `;
+    }
+    list.querySelectorAll(".admin-member-remove").forEach((btn) => {
+        btn.addEventListener("click", () => adminRemoveMember(btn.dataset.name));
+    });
+
+    document.getElementById("admin-overlay").hidden = false;
+}
+
+async function adminRename() {
+    const name = document.getElementById("admin-team-name-input").value.trim();
+    if (!name) return;
+
+    const res = await fetch(`${API}/api/teams/${currentTeamId}/admin`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, name }),
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    currentTeam.name = data.team.name;
+    document.getElementById("header-team").textContent = data.team.name;
+    document.getElementById("admin-title").textContent = data.team.name;
+    const myTeam = teams.find((t) => t.id === currentTeamId);
+    if (myTeam) myTeam.name = data.team.name;
+}
+
+async function adminRegenCode() {
+    if (!confirm("Régénérer le code d'invitation ? L'ancien ne fonctionnera plus.")) return;
+
+    const res = await fetch(`${API}/api/teams/${currentTeamId}/admin`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, regenerate_code: true }),
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+    currentTeam.invite_code = data.team.invite_code;
+    document.getElementById("admin-invite-code").textContent = data.team.invite_code;
+    const myTeam = teams.find((t) => t.id === currentTeamId);
+    if (myTeam) myTeam.invite_code = data.team.invite_code;
+}
+
+async function adminRemoveMember(name) {
+    if (!confirm(`Retirer ${name} de l'équipe ?`)) return;
+
+    const res = await fetch(`${API}/api/teams/${currentTeamId}/members/${encodeURIComponent(name)}?user_id=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+    });
+    if (!res.ok) return;
+
+    openAdminPanel();
+}
+
+async function adminDeleteTeam() {
+    if (!confirm("Supprimer l'équipe ? Cette action est irréversible.")) return;
+    if (!confirm("Vraiment supprimer ? Tous les votes et restaurants seront perdus.")) return;
+
+    const res = await fetch(`${API}/api/teams/${currentTeamId}?user_id=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+    });
+    if (!res.ok) return;
+
+    document.getElementById("admin-overlay").hidden = true;
+    teams = teams.filter((t) => t.id !== currentTeamId);
+    currentTeamId = "";
+    localStorage.removeItem("buddydejeuner_current_team");
+    document.getElementById("main-screen").hidden = true;
+    showTeamStep();
 }
 
 // --- Tabs ---
@@ -286,7 +679,7 @@ async function loadVotePage() {
         fetch(`${API}/api/teams/${currentTeamId}/votes/${today}`).then((r) => r.json()),
     ]);
 
-    const myVotes = votes[username] || [];
+    const myVotes = votes[displayName] || [];
     hasSubmitted = myVotes.length > 0;
     const voterCount = Object.keys(votes).length;
     document.getElementById("vote-subtitle").textContent =
@@ -346,7 +739,7 @@ async function submitVotes() {
     await fetch(`${API}/api/teams/${currentTeamId}/votes/${today}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_name: username, restaurant_ids: ids }),
+        body: JSON.stringify({ user_id: userId, restaurant_ids: ids }),
     });
 
     votes = await fetch(`${API}/api/teams/${currentTeamId}/votes/${today}`).then((r) => r.json());
@@ -363,10 +756,10 @@ async function submitVotes() {
 // --- Matches ---
 
 function getMatches() {
-    const myVotes = votes[username] || [];
+    const myVotes = votes[displayName] || [];
     const matches = [];
     for (const [person, picks] of Object.entries(votes)) {
-        if (person === username) continue;
+        if (person === displayName) continue;
         const shared = picks.filter((id) => myVotes.includes(id));
         if (shared.length > 0) matches.push({ name: person, sharedIds: shared, count: shared.length });
     }
@@ -489,10 +882,10 @@ function renderResults() {
         container.innerHTML = html;
     } else {
         let html = "";
-        const myVotes = votes[username] || [];
+        const myVotes = votes[displayName] || [];
         for (const [person, picks] of Object.entries(votes).sort()) {
             const restoNames = picks.map((id) => {
-                const shared = hasSubmitted && person !== username && myVotes.includes(id);
+                const shared = hasSubmitted && person !== displayName && myVotes.includes(id);
                 return { name: restaurantById[id], shared };
             }).filter((r) => r.name);
 
