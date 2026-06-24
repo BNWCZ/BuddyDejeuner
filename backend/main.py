@@ -1,3 +1,6 @@
+import threading
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -14,16 +17,44 @@ from backend.database import (
     get_restaurants, add_restaurant, update_restaurant, delete_restaurant,
     get_votes, set_votes, update_foodtruck_tags,
     get_team_admin_data, update_team_admin, remove_team_member, delete_team,
+    get_team_foodtruck_settings, set_team_foodtruck_settings, has_current_week_foodtrucks,
 )
-from backend.scraper import get_todays_foodtrucks
+from backend.scraper import get_todays_foodtrucks, scrape_foodtrucks_week
 
 app = FastAPI()
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 
+def _seconds_until_next_monday_7am():
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=7, minute=0, second=0, microsecond=0) + timedelta(
+        days=(0 - now.weekday()) % 7
+    )
+    if target <= now:
+        target += timedelta(days=7)
+    return (target - now).total_seconds()
+
+
+def _foodtruck_scheduler():
+    # Bootstrap: if this week was never scraped (fresh deploy mid-week), scrape now.
+    try:
+        if not has_current_week_foodtrucks():
+            scrape_foodtrucks_week()
+    except Exception as e:
+        print("foodtruck initial scrape failed:", e)
+    # Then refresh every Monday 07:00 UTC, when the new week's schedule is published.
+    while True:
+        time.sleep(_seconds_until_next_monday_7am())
+        try:
+            scrape_foodtrucks_week()
+        except Exception as e:
+            print("foodtruck weekly scrape failed:", e)
+
+
 @app.on_event("startup")
 def startup():
     init_db()
+    threading.Thread(target=_foodtruck_scheduler, daemon=True).start()
 
 
 # --- User endpoints ---
@@ -189,10 +220,16 @@ class RestaurantUpdate(BaseModel):
 @app.get("/api/teams/{team_id}/restaurants")
 def list_restaurants(team_id: str):
     restaurants = get_restaurants(team_id)
-    try:
-        foodtrucks = get_todays_foodtrucks()
-    except Exception:
-        foodtrucks = []
+    settings = get_team_foodtruck_settings(team_id)
+    foodtrucks = []
+    if settings["show"]:
+        try:
+            foodtrucks = get_todays_foodtrucks()
+        except Exception:
+            foodtrucks = []
+        if settings["configured"]:
+            allowed = set(settings["allowed"])
+            foodtrucks = [t for t in foodtrucks if t["address"] in allowed]
     return restaurants + foodtrucks
 
 
@@ -241,6 +278,19 @@ class TagsUpdate(BaseModel):
 @app.put("/api/foodtrucks/{rid}/tags")
 def edit_foodtruck_tags(rid: str, body: TagsUpdate):
     update_foodtruck_tags(rid, body.tags)
+    return {"ok": True}
+
+
+class FoodtruckSettings(BaseModel):
+    user_id: str
+    show: bool
+    locations: list[str] = []
+
+
+@app.put("/api/teams/{team_id}/foodtruck-settings")
+def api_set_foodtruck_settings(team_id: str, body: FoodtruckSettings):
+    if not set_team_foodtruck_settings(team_id, body.user_id, body.show, body.locations):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     return {"ok": True}
 
 

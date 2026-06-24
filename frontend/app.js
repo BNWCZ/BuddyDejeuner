@@ -533,6 +533,7 @@ function setupAppHandlers() {
         setTimeout(() => { btn.textContent = "COPIER"; }, 2000);
     });
     document.getElementById("admin-regen-btn").addEventListener("click", adminRegenCode);
+    document.getElementById("admin-ft-save-btn").addEventListener("click", adminSaveFoodtrucks);
     document.getElementById("admin-delete-btn").addEventListener("click", adminDeleteTeam);
 
     // Close user menu when clicking outside
@@ -592,7 +593,36 @@ async function openAdminPanel() {
         btn.addEventListener("click", () => adminRemoveMember(btn.dataset.name));
     });
 
+    renderFoodtruckSettings(data.foodtruck);
+
     document.getElementById("admin-overlay").hidden = false;
+}
+
+function renderFoodtruckSettings(ft) {
+    document.getElementById("admin-ft-show").checked = ft.show;
+    const div = document.getElementById("admin-ft-locations");
+    if (!ft.available_locations.length) {
+        div.innerHTML = '<div class="admin-label" style="opacity:.6">Aucun emplacement publié cette semaine</div>';
+        return;
+    }
+    // First time (not yet configured) every location is shown, so pre-check them all.
+    div.innerHTML = ft.available_locations.map((loc) => {
+        const checked = ft.configured ? ft.allowed.includes(loc) : true;
+        return `<label style="display:flex;align-items:center;gap:8px"><input type="checkbox" value="${loc}" ${checked ? "checked" : ""}> ${loc}</label>`;
+    }).join("");
+}
+
+async function adminSaveFoodtrucks() {
+    const show = document.getElementById("admin-ft-show").checked;
+    const locations = [...document.querySelectorAll("#admin-ft-locations input:checked")].map((c) => c.value);
+    await fetch(`${API}/api/teams/${currentTeamId}/foodtruck-settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, show, locations }),
+    });
+    const btn = document.getElementById("admin-ft-save-btn");
+    btn.textContent = "ENREGISTRÉ ✓";
+    setTimeout(() => { btn.textContent = "ENREGISTRER LES FOOD TRUCKS"; }, 2000);
 }
 
 async function adminRename() {

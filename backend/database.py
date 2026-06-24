@@ -2,7 +2,7 @@ import random
 import secrets
 import sqlite3
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -69,6 +69,16 @@ def init_db():
                 address TEXT DEFAULT '',
                 tags TEXT DEFAULT '',
                 PRIMARY KEY (date, id)
+            );
+            CREATE TABLE IF NOT EXISTS team_foodtruck_settings (
+                team_id TEXT PRIMARY KEY,
+                show_foodtrucks INTEGER DEFAULT 1,
+                locations_configured INTEGER DEFAULT 0
+            );
+            CREATE TABLE IF NOT EXISTS team_foodtruck_locations (
+                team_id TEXT NOT NULL,
+                location TEXT NOT NULL,
+                PRIMARY KEY (team_id, location)
             );
         """)
     conn.commit()
@@ -331,9 +341,12 @@ def get_team_admin_data(team_id, user_id):
         "SELECT display_name, is_admin FROM team_members WHERE team_id=?", (team_id,)
     ).fetchall()
     conn.close()
+    ft = get_team_foodtruck_settings(team_id)
+    ft["available_locations"] = get_week_foodtruck_locations()
     return {
         "team": {"id": team["id"], "name": team["name"], "invite_code": team["invite_code"]},
         "members": [{"display_name": m["display_name"], "is_admin": bool(m["is_admin"])} for m in members],
+        "foodtruck": ft,
     }
 
 
@@ -476,17 +489,95 @@ def get_cached_foodtrucks(cache_date=None):
     return [dict(r) for r in rows]
 
 
-def save_foodtrucks(trucks, cache_date=None):
-    if cache_date is None:
-        cache_date = date.today().isoformat()
+def save_week_foodtrucks(by_date):
+    """Replace the cache for each scraped date with its fresh truck list."""
     conn = get_db()
-    for t in trucks:
+    for cache_date, trucks in by_date.items():
+        conn.execute("DELETE FROM foodtruck_cache WHERE date=?", (cache_date,))
+        for t in trucks:
+            conn.execute(
+                "INSERT OR REPLACE INTO foodtruck_cache (date, id, name, address, tags) VALUES (?, ?, ?, ?, ?)",
+                (cache_date, t["id"], t["name"], t["address"], t["tags"]),
+            )
+    conn.commit()
+    conn.close()
+
+
+def _current_monday():
+    return (date.today() - timedelta(days=date.today().weekday())).isoformat()
+
+
+def has_current_week_foodtrucks():
+    conn = get_db()
+    n = conn.execute(
+        "SELECT COUNT(*) AS c FROM foodtruck_cache WHERE date >= ?", (_current_monday(),)
+    ).fetchone()["c"]
+    conn.close()
+    return n > 0
+
+
+def get_week_foodtruck_locations():
+    """Distinct locations seen across the current week's cache (for the admin picker)."""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT DISTINCT address FROM foodtruck_cache WHERE date >= ? AND address != '' ORDER BY address",
+        (_current_monday(),),
+    ).fetchall()
+    conn.close()
+    return [r["address"] for r in rows]
+
+
+# --- Per-team food truck settings ---
+
+def get_team_foodtruck_settings(team_id):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT show_foodtrucks, locations_configured FROM team_foodtruck_settings WHERE team_id=?",
+        (team_id,),
+    ).fetchone()
+    locs = [
+        r["location"]
+        for r in conn.execute(
+            "SELECT location FROM team_foodtruck_locations WHERE team_id=?", (team_id,)
+        ).fetchall()
+    ]
+    conn.close()
+    if not row:
+        # No config yet: default to showing every nearby truck until the admin narrows it.
+        return {"show": True, "configured": False, "allowed": locs}
+    return {
+        "show": bool(row["show_foodtrucks"]),
+        "configured": bool(row["locations_configured"]),
+        "allowed": locs,
+    }
+
+
+def set_team_foodtruck_settings(team_id, user_id, show, locations):
+    conn = get_db()
+    me = conn.execute(
+        "SELECT is_admin FROM team_members WHERE team_id=? AND user_id=?",
+        (team_id, user_id),
+    ).fetchone()
+    if not me or not me["is_admin"]:
+        conn.close()
+        return False
+    conn.execute(
+        """
+        INSERT INTO team_foodtruck_settings (team_id, show_foodtrucks, locations_configured)
+        VALUES (?, ?, 1)
+        ON CONFLICT(team_id) DO UPDATE SET show_foodtrucks=excluded.show_foodtrucks, locations_configured=1
+        """,
+        (team_id, 1 if show else 0),
+    )
+    conn.execute("DELETE FROM team_foodtruck_locations WHERE team_id=?", (team_id,))
+    for loc in locations:
         conn.execute(
-            "INSERT OR REPLACE INTO foodtruck_cache (date, id, name, address, tags) VALUES (?, ?, ?, ?, ?)",
-            (cache_date, t["id"], t["name"], t["address"], t["tags"]),
+            "INSERT OR IGNORE INTO team_foodtruck_locations (team_id, location) VALUES (?, ?)",
+            (team_id, loc),
         )
     conn.commit()
     conn.close()
+    return True
 
 
 def update_foodtruck_tags(truck_id, tags, cache_date=None):
